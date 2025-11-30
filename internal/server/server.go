@@ -2,18 +2,20 @@ package server
 
 import (
 	"net/http"
+	"github.com/go-chi/chi/v5"
 )
 
 type Server struct {
-	route *http.ServeMux
+	route *chi.Mux
 	addr string
 }
 
 func New(handler http.HandlerFunc) *Server {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", handler)
+	r := chi.NewRouter()
+	r.HandleFunc("/", handler)
+	r.HandleFunc("/{id}", handler)
 	return &Server{
-		route: mux,
+		route: r,
 		addr: ":8080",
 	}
 }

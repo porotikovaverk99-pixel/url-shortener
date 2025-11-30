@@ -3,9 +3,9 @@ package handlers
 import (
     "net/http"
     "io"
-    "strings"
     "math/rand"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
+	"github.com/go-chi/chi/v5"
 )
 
 func generateShortID(l int) string {
@@ -20,12 +20,13 @@ func generateShortID(l int) string {
 func URLHandler(storage storage.URLStorage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
         if r.Method == http.MethodGet {
-			id := strings.TrimPrefix(r.URL.Path, "/")
+			id := chi.URLParam(r, "id")
 			if id == "" {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
 			originalURL, err := storage.Get(id)
+			println("DEBUG: URL from storage:", originalURL, "Error:", err)
 			if err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return

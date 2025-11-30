@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/require"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
+	"github.com/go-chi/chi/v5"
 )
 
 func TestURLHandler(t *testing.T) {
@@ -18,8 +19,7 @@ func TestURLHandler(t *testing.T) {
 		contentType string
 		location string
 	}
-	stor := storage.NewMemoryStorage()
-	stor.Save("abcdef", "yandex.ru")
+	
 	tests := []struct {
 		name string
 		url string
@@ -32,11 +32,11 @@ func TestURLHandler(t *testing.T) {
 			name: "test POST",
 			url: "/",
 			method: http.MethodPost,
-			body: strings.NewReader("yandex.ru"),
-			storage: stor,
+			body: strings.NewReader("google.ru"),
+			storage: storage.NewMemoryStorage(),
 			want: want {
 				statusCode: 201,
-				contentType: "",
+				contentType: "text/plain; charset=utf-8",
 				location: "",
 			},
 		},
@@ -45,7 +45,7 @@ func TestURLHandler(t *testing.T) {
 			url: "/",
 			method: http.MethodPost,
 			body: strings.NewReader(""),
-			storage: stor,
+			storage: storage.NewMemoryStorage(),
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
@@ -57,7 +57,11 @@ func TestURLHandler(t *testing.T) {
 			url: "/abcdef",
 			method: http.MethodGet,
 			body: nil,
-			storage: stor,
+			storage: func() storage.URLStorage {
+				stor := storage.NewMemoryStorage()
+				stor.Save("abcdef", "yandex.ru")
+				return stor
+			}(),
 			want: want {
 				statusCode: 307,
 				contentType: "",
@@ -69,7 +73,7 @@ func TestURLHandler(t *testing.T) {
 			url: "/aaaaaa",
 			method: http.MethodGet,
 			body: nil,
-			storage: stor,
+			storage: storage.NewMemoryStorage(),
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
@@ -81,7 +85,7 @@ func TestURLHandler(t *testing.T) {
 			url: "/",
 			method: http.MethodGet,
 			body: nil,
-			storage: stor,
+			storage: storage.NewMemoryStorage(),
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
@@ -93,7 +97,7 @@ func TestURLHandler(t *testing.T) {
 			url: "/",
 			method: http.MethodPut,
 			body: nil,
-			storage: stor,
+			storage: storage.NewMemoryStorage(),
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
@@ -101,16 +105,33 @@ func TestURLHandler(t *testing.T) {
 			},
 		},
 	}
+	
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest(test.method, test.url, test.body)
-			w := httptest.NewRecorder()
+			r := chi.NewRouter()
 			handler := URLHandler(test.storage)
-			handler(w, request)
-			res := w.Result()
+			r.Post("/", handler)
+			r.Get("/{id}", handler)
+			r.HandleFunc("/*", handler)
+
+			ts := httptest.NewServer(r)
+			defer ts.Close()
+
+			req, err := http.NewRequest(test.method, ts.URL + test.url, test.body)
+			require.NoError(t, err)
+
+			client := &http.Client{
+				CheckRedirect: func(req *http.Request, via []*http.Request) error {
+					return http.ErrUseLastResponse
+				},
+			}
+			res, err := client.Do(req)
+			require.NoError(t, err)
+			
+			defer res.Body.Close() 
+
 			assert.Equal(t, test.want.statusCode, res.StatusCode)
-			if request.Method == http.MethodPost && res.StatusCode == 201 {
-				defer res.Body.Close() 
+			if test.method == http.MethodPost && res.StatusCode == 201 {
 				body, err := io.ReadAll(res.Body)
 				require.NoError(t, err)
 				responseURL := string(body)
@@ -118,7 +139,7 @@ func TestURLHandler(t *testing.T) {
 				short := parts[len(parts)-1]   
 				original, err := test.storage.Get(short)
 				assert.NoError(t, err)
-				assert.Equal(t, "yandex.ru", original)
+				assert.Equal(t, "google.ru", original)
 			}
 			assert.Equal(t, test.want.contentType, res.Header.Get("Content-Type"))
 			assert.Equal(t, test.want.location, res.Header.Get("Location"))

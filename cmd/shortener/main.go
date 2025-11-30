@@ -7,6 +7,7 @@ import (
 )
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	storage := storage.NewMemoryStorage()
 	handler := handlers.URLHandler(storage)
 	server := server.New(handler)
