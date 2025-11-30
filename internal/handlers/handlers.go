@@ -5,7 +5,7 @@ import (
     "io"
     "strings"
     "math/rand"
-	"url-shortener/internal/storage"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 )
 
 func generateShortID(l int) string {
@@ -54,7 +54,7 @@ func URLHandler(storage storage.URLStorage) http.HandlerFunc {
 		} else {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 		}
-	})
+	}
 }
 
 

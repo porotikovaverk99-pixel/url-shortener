@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 	"net/http"
-	"net/httptest"
+	"net/http/httptest"
 	"github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/require"
-	"url-shortener/internal/storage"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 )
 
 func TestURLHandler(t *testing.T) {
@@ -31,73 +31,73 @@ func TestURLHandler(t *testing.T) {
 		{
 			name: "test POST",
 			url: "/",
-			method: http.MethodPOST,
+			method: http.MethodPost,
 			body: strings.NewReader("yandex.ru"),
 			storage: stor,
 			want: want {
 				statusCode: 201,
-				contentType: "text/plain; charset=utf-8",
-				location: ""
+				contentType: "",
+				location: "",
 			},
 		},
 		{
 			name: "test POST no data",
 			url: "/",
-			method: http.MethodPOST,
+			method: http.MethodPost,
 			body: strings.NewReader(""),
 			storage: stor,
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
-				location: ""
+				location: "",
 			},
 		},
 		{
 			name: "test GET",
 			url: "/abcdef",
-			method: http.MethodGET,
+			method: http.MethodGet,
 			body: nil,
 			storage: stor,
 			want: want {
 				statusCode: 307,
-				contentType: "text/plain; charset=utf-8",
-				location: "yandex.ru"
+				contentType: "",
+				location: "yandex.ru",
 			},
 		},
 		{
 			name: "test GET no url",
 			url: "/aaaaaa",
-			method: http.MethodGET,
+			method: http.MethodGet,
 			body: nil,
 			storage: stor,
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
-				location: ""
+				location: "",
 			},
 		},
 		{
 			name: "test GET no id",
 			url: "/",
-			method: http.MethodGET,
+			method: http.MethodGet,
 			body: nil,
 			storage: stor,
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
-				location: ""
+				location: "",
 			},
 		},
 		{
 			name: "test PUT",
 			url: "/",
-			method: http.MethodPUT,
+			method: http.MethodPut,
 			body: nil,
 			storage: stor,
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
-				location: ""
+				location: "",
 			},
 		},
 	}
@@ -109,14 +109,16 @@ func TestURLHandler(t *testing.T) {
 			handler(w, request)
 			res := w.Result()
 			assert.Equal(t, test.want.statusCode, res.StatusCode)
-			if request.Method == http.MethodPOST && res.StatusCode == 201 {
+			if request.Method == http.MethodPost && res.StatusCode == 201 {
 				defer res.Body.Close() 
 				body, err := io.ReadAll(res.Body)
 				require.NoError(t, err)
-				short := strings.TrimPrefix(body, "/")
+				responseURL := string(body)
+				parts := strings.Split(responseURL, "/")
+				short := parts[len(parts)-1]   
 				original, err := test.storage.Get(short)
 				assert.NoError(t, err)
-				assert.Equal(t, string(test.body), original)
+				assert.Equal(t, "yandex.ru", original)
 			}
 			assert.Equal(t, test.want.contentType, res.Header.Get("Content-Type"))
 			assert.Equal(t, test.want.location, res.Header.Get("Location"))

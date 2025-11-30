@@ -1,9 +1,9 @@
 package main
 
 import (
-	"url-shortener/internal/handlers"
-	"url-shortener/internal/storage"
-	"url-shortener/internal/server"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/handlers"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/server"
 )
 
 func main() {
