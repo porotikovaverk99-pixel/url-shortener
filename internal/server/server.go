@@ -9,7 +9,7 @@ type Server struct {
 	addr string
 }
 
-func New(handler *http.HandlerFunc) *Server {
+func New(handler http.HandlerFunc) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handler)
 	return &Server{
