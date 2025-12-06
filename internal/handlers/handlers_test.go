@@ -26,6 +26,7 @@ func TestURLHandler(t *testing.T) {
 		method string
 		body io.Reader
 		storage storage.URLStorage
+		baseURL string
 		want want
 	} {
 		{
@@ -34,6 +35,7 @@ func TestURLHandler(t *testing.T) {
 			method: http.MethodPost,
 			body: strings.NewReader("google.ru"),
 			storage: storage.NewMemoryStorage(),
+			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 201,
 				contentType: "text/plain; charset=utf-8",
@@ -46,6 +48,7 @@ func TestURLHandler(t *testing.T) {
 			method: http.MethodPost,
 			body: strings.NewReader(""),
 			storage: storage.NewMemoryStorage(),
+			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
@@ -62,6 +65,7 @@ func TestURLHandler(t *testing.T) {
 				stor.Save("abcdef", "yandex.ru")
 				return stor
 			}(),
+			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 307,
 				contentType: "",
@@ -74,6 +78,7 @@ func TestURLHandler(t *testing.T) {
 			method: http.MethodGet,
 			body: nil,
 			storage: storage.NewMemoryStorage(),
+			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
@@ -86,6 +91,7 @@ func TestURLHandler(t *testing.T) {
 			method: http.MethodGet,
 			body: nil,
 			storage: storage.NewMemoryStorage(),
+			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
@@ -98,6 +104,7 @@ func TestURLHandler(t *testing.T) {
 			method: http.MethodPut,
 			body: nil,
 			storage: storage.NewMemoryStorage(),
+			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 400,
 				contentType: "text/plain; charset=utf-8",
@@ -109,7 +116,7 @@ func TestURLHandler(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			r := chi.NewRouter()
-			handler := URLHandler(test.storage)
+			handler := URLHandler(test.storage, test.baseURL)
 			r.Post("/", handler)
 			r.Get("/{id}", handler)
 			r.HandleFunc("/*", handler)
@@ -124,7 +131,7 @@ func TestURLHandler(t *testing.T) {
 				CheckRedirect: func(req *http.Request, via []*http.Request) error {
 					return http.ErrUseLastResponse
 				},
-			}
+			} 
 			res, err := client.Do(req)
 			require.NoError(t, err)
 			
