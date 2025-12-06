@@ -28,7 +28,6 @@ func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
 				return
 			}
 			originalURL, err := storage.Get(id)
-			println("DEBUG: URL from storage:", originalURL, "Error:", err)
 			if err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
