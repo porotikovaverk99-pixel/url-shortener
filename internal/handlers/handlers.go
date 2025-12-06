@@ -53,6 +53,7 @@ func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
+			 w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(201)
 			w.Write([]byte(baseURL + "/" + id))
 
@@ -61,7 +62,7 @@ func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 
 		}
-	}
+	} 
 }
 
 
