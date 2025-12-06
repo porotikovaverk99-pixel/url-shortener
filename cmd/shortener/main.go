@@ -1,8 +1,7 @@
 package main
 
 import (
-	"math/rand"
-    "time"
+
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/handlers"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/server"
@@ -10,8 +9,6 @@ import (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-
 	cfg := config.ParseFlags()
 
 	storage := storage.NewMemoryStorage()
