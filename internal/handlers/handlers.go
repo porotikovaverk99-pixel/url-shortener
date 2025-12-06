@@ -17,9 +17,11 @@ func generateShortID(l int) string {
     return string(result)
 }
 
-func URLHandler(storage storage.URLStorage) http.HandlerFunc {
+func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
+
 	return func(w http.ResponseWriter, r *http.Request) {
         if r.Method == http.MethodGet {
+
 			id := chi.URLParam(r, "id")
 			if id == "" {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -33,7 +35,9 @@ func URLHandler(storage storage.URLStorage) http.HandlerFunc {
 			}
 			w.Header().Set("Location", originalURL)
 			w.WriteHeader(307)
+
 		} else if r.Method == http.MethodPost {
+
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -51,9 +55,12 @@ func URLHandler(storage storage.URLStorage) http.HandlerFunc {
 				return
 			}
 			w.WriteHeader(201)
-			w.Write([]byte("http://" + r.Host + "/" + id))
+			w.Write([]byte(baseURL + "/" + id))
+
 		} else {
+
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+
 		}
 	}
 }

@@ -10,13 +10,13 @@ type Server struct {
 	addr string
 }
 
-func New(handler http.HandlerFunc) *Server {
+func New(handler http.HandlerFunc, addr string) *Server {
 	r := chi.NewRouter()
 	r.HandleFunc("/", handler)
 	r.HandleFunc("/{id}", handler)
 	return &Server{
 		route: r,
-		addr: ":8080",
+		addr: addr, 
 	}
 }
 
