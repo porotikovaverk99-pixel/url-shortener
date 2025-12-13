@@ -6,17 +6,22 @@ import (
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/server"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/config"
+	"fmt"
+
 )
 
 func main() {
+
 	cfg := config.ParseFlags()
 
 	storage := storage.NewMemoryStorage()
 	handler := handlers.URLHandler(storage, cfg.BaseURL)
 	server := server.New(handler, cfg.RunAddr)
 
+	fmt.Println("Running server on " + cfg.RunAddr)
 	err := server.Run() 
 	if err != nil {
 		panic("Error occurs while running server: " + err.Error())
-	}
+	} 
+
 }
