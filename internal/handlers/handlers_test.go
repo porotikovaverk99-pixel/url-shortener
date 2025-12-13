@@ -147,7 +147,7 @@ func TestURLHandler(t *testing.T) {
 				original, err := test.storage.Get(context.Background(), short)
 				assert.NoError(t, err)
 				assert.Equal(t, "google.ru", original)
-			}
+			} 
 			assert.Equal(t, test.want.contentType, res.Header.Get("Content-Type"))
 			assert.Equal(t, test.want.location, res.Header.Get("Location"))
 		})

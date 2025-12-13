@@ -4,7 +4,7 @@ import (
     "net/http"
     "io"
     "math/rand"
-	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
+	strg "github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"errors"
 )
@@ -18,7 +18,7 @@ func generateShortID(l int) string {
     return string(result)
 }
 
-func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
+func URLHandler(storage strg.URLStorage, baseURL string) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
         if r.Method == http.MethodGet {
@@ -30,7 +30,7 @@ func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
 			}
 			originalURL, err := storage.Get(r.Context(), id)
 			if err != nil {
-				if errors.Is(err, storage.ErrURLNotFound) {
+				if errors.Is(err, strg.ErrURLNotFound) {
 					http.Error(w, "Not found", http.StatusNotFound)
 				} else {
 					http.Error(w, "Server error", http.StatusInternalServerError)
@@ -55,7 +55,7 @@ func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
 			id := generateShortID(8)
 			err = storage.Save(r.Context(), id, originalURL)
 			if err != nil {
-				if errors.Is(err, storage.ErrURLAlreadyExists) {
+				if errors.Is(err, strg.ErrURLAlreadyExists) {
 					http.Error(w, "Conflict", http.StatusConflict)
 				} else {
 					http.Error(w, "Server error", http.StatusInternalServerError)
@@ -70,7 +70,7 @@ func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
 
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 
-		}
+		} 
 	} 
 }
 
