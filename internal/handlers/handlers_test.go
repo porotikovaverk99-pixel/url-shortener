@@ -62,7 +62,7 @@ func TestURLHandler(t *testing.T) {
 			body: nil,
 			storage: func() storage.URLStorage {
 				stor := storage.NewMemoryStorage()
-				stor.Save("abcdef", "yandex.ru")
+				stor.Save(context.Background(), "abcdef", "yandex.ru")
 				return stor
 			}(),
 			baseURL: "http://localhost:8080",
@@ -80,7 +80,7 @@ func TestURLHandler(t *testing.T) {
 			storage: storage.NewMemoryStorage(),
 			baseURL: "http://localhost:8080",
 			want: want {
-				statusCode: 400,
+				statusCode: 404,
 				contentType: "text/plain; charset=utf-8",
 				location: "",
 			},
@@ -144,7 +144,7 @@ func TestURLHandler(t *testing.T) {
 				responseURL := string(body)
 				parts := strings.Split(responseURL, "/")
 				short := parts[len(parts)-1]   
-				original, err := test.storage.Get(short)
+				original, err := test.storage.Get(context.Background(), short)
 				assert.NoError(t, err)
 				assert.Equal(t, "google.ru", original)
 			}

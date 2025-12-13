@@ -6,6 +6,7 @@ import (
     "math/rand"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"errors"
 )
 
 func generateShortID(l int) string {
@@ -27,13 +28,17 @@ func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
 				http.Error(w, "Bad Request", http.StatusBadRequest)
 				return
 			}
-			originalURL, err := storage.Get(id)
+			originalURL, err := storage.Get(r.Context(), id)
 			if err != nil {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				if errors.Is(err, storage.ErrURLNotFound) {
+					http.Error(w, "Not found", http.StatusNotFound)
+				} else {
+					http.Error(w, "Server error", http.StatusInternalServerError)
+				}
 				return
 			}
 			w.Header().Set("Location", originalURL)
-			w.WriteHeader(307)
+			w.WriteHeader(http.StatusTemporaryRedirect)
 
 		} else if r.Method == http.MethodPost {
 
@@ -48,13 +53,17 @@ func URLHandler(storage storage.URLStorage, baseURL string) http.HandlerFunc {
 				return
 			}
 			id := generateShortID(8)
-			err = storage.Save(id, originalURL)
+			err = storage.Save(r.Context(), id, originalURL)
 			if err != nil {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				if errors.Is(err, storage.ErrURLAlreadyExists) {
+					http.Error(w, "Conflict", http.StatusConflict)
+				} else {
+					http.Error(w, "Server error", http.StatusInternalServerError)
+				}
 				return
 			}
-			 w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(201)
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusCreated)
 			w.Write([]byte(baseURL + "/" + id))
 
 		} else {

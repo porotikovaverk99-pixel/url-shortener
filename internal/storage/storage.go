@@ -3,6 +3,12 @@ package storage
 import (
 	"errors"
 	"sync"
+	"context"
+)
+
+var (
+    ErrURLNotFound      = errors.New("URL not found")
+    ErrURLAlreadyExists = errors.New("URL already exists")
 )
 
 type MemoryStorage struct {
@@ -17,25 +23,25 @@ func NewMemoryStorage() *MemoryStorage {
 }
 
 type URLStorage interface {
-	Save(short string, original string) error
-	Get(short string) (string, error)
+	Save(ctx context.Context, short string, original string) error
+	Get(ctx context.Context, short string) (string, error)
 }
 
-func (ms *MemoryStorage) Save(short string, original string) error {
+func (ms *MemoryStorage) Save(ctx context.Context, short string, original string) error {
 	ms.mu.Lock() 
     defer ms.mu.Unlock()
 	if _, ok := ms.data[short]; ok {
-		return errors.New("URL already exists")
+		return ErrURLAlreadyExists
 	}
 	ms.data[short] = original
 	return nil
 }
 
-func (ms *MemoryStorage) Get(short string) (string, error) {
+func (ms *MemoryStorage) Get(ctx context.Context, short string) (string, error) {
 	ms.mu.RLock()
     defer ms.mu.RUnlock()
 	if original, ok := ms.data[short]; ok {
 		return original, nil
 	}
-	return "", errors.New("URL not found")
+	return "", ErrURLNotFound
 }

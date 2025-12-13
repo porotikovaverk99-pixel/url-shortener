@@ -17,6 +17,6 @@ func main() {
 
 	err := server.Run() 
 	if err != nil {
-		panic(err)
+		panic("Error occurs while running server: " + err.Error())
 	}
 }
