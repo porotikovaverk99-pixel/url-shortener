@@ -10,6 +10,7 @@ import (
     "github.com/stretchr/testify/require"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"context"
 )
 
 func TestURLHandler(t *testing.T) {
