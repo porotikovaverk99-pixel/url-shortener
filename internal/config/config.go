@@ -3,11 +3,13 @@ package config
 import (
 	"flag"
 	"strings"
+    "os"
 )
 
 type Config struct {
     RunAddr string
     BaseURL string
+    LogLevel string
 }
 
 func ParseFlags() Config {
@@ -15,7 +17,20 @@ func ParseFlags() Config {
 
 	flag.StringVar(&cfg.RunAddr, "a", ":8080", "address and port to run server")
 	flag.StringVar(&cfg.BaseURL, "b", "", "base URL for shortened URLs")
+    flag.StringVar(&cfg.LogLevel, "l", "Info", "log level")
 	flag.Parse()
+
+    if sa := os.Getenv("SERVER_ADDRESS"); sa != "" {
+        cfg.RunAddr = sa
+    }
+
+    if bu := os.Getenv("BASE_URL"); bu != "" { 
+        cfg.BaseURL = bu
+    }
+
+    if l := os.Getenv("LOG_LEVEL"); l != "" {
+        cfg.LogLevel = l
+    }
 
 	if cfg.BaseURL == "" {
         host := "localhost"
