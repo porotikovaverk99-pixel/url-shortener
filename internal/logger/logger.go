@@ -42,7 +42,7 @@ func Initialize(level string) error {
     cfg := zap.NewProductionConfig()
     cfg.Level = lvl
 
-    cfg.EncoderConfig.EncodeDuration = zapcore.MillisDurationEncoder
+    cfg.EncoderConfig.EncodeDuration = zapcore.NanosDurationEncoder
 
     zl, err := cfg.Build()
     if err != nil {
