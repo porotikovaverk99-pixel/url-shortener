@@ -4,7 +4,7 @@ import (
     "net/http"
     "io"
     "math/rand"
-	strg "url-shortener/internal/storage"
+	strg "github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"errors"
 )
