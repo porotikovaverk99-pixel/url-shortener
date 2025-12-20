@@ -3,7 +3,6 @@ package logger
 import (
     "net/http"
     "go.uber.org/zap"
-    "go.uber.org/zap/zapcore"
     "time"
 )
 
@@ -41,8 +40,6 @@ func Initialize(level string) error {
 
     cfg := zap.NewProductionConfig()
     cfg.Level = lvl
-
-    cfg.EncoderConfig.EncodeDuration = zapcore.NanosDurationEncoder
 
     zl, err := cfg.Build()
     if err != nil {
