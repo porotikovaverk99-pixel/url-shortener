@@ -51,8 +51,8 @@ func Initialize(level string) error {
 
 }
 
-func RequestLogger(h http.HandlerFunc) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func RequestLogger(h http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
 
         uri := r.RequestURI
         method := r.Method
@@ -80,5 +80,5 @@ func RequestLogger(h http.HandlerFunc) http.Handler {
             zap.Int("status", responseData.status),
             zap.Int("size", responseData.size),
         )
-    })
+    }
 }

@@ -15,7 +15,7 @@ func main() {
 
 	cfg := config.ParseFlags()
 
-	if err := logger.Itialize(cfg.LogLevel); err != nil {
+	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		panic("Error ocurs while initializing logger: " + err.Error())
 	}
 
