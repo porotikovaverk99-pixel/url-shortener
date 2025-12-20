@@ -3,6 +3,7 @@ package logger
 import (
     "net/http"
     "go.uber.org/zap"
+    "go.uber.org/zap/zapcore"
     "time"
 )
 
