@@ -73,7 +73,7 @@ func RequestLogger(h http.HandlerFunc) http.HandlerFunc {
 
         duration := time.Since(start)
 
-        Log.Debug("got incoming HTTP request", 
+        Log.Info("HTTP request", 
             zap.String("uri", uri), 
             zap.String("method", method),
             zap.Duration("duration", duration),
