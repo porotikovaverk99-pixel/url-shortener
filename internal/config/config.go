@@ -17,14 +17,14 @@ func ParseFlags() Config {
 
 	flag.StringVar(&cfg.RunAddr, "a", ":8080", "address and port to run server")
 	flag.StringVar(&cfg.BaseURL, "b", "", "base URL for shortened URLs")
-    flag.StringVar(&cfg.BaseURL, "l", "Info", "log level")
+    flag.StringVar(&cfg.LogLevel, "l", "Info", "log level")
 	flag.Parse()
 
     if sa := os.Getenv("SERVER_ADDRESS"); sa != "" {
         cfg.RunAddr = sa
     }
 
-    if bu := os.Getenv("BASE_URL"); bu != "" {
+    if bu := os.Getenv("BASE_URL"); bu != "" { 
         cfg.BaseURL = bu
     }
 

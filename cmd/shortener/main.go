@@ -24,7 +24,7 @@ func main() {
 	server := server.New(handler, cfg.RunAddr)
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
-
+	 
 	err := server.Run() 
 	if err != nil {
 		panic("Error occurs while running server: " + err.Error())
