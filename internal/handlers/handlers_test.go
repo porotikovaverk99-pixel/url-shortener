@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/require"
-	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
+	"url-shortener/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"context"
 )
