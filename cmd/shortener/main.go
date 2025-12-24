@@ -28,7 +28,7 @@ func main() {
 
 	server.RegisterHandler("/", handlerMain)
 	server.RegisterHandler("/{id}", handlerMain)
-	server.RegisterHandler("/api/shorten", handlerShorten)
+	server.Post("/api/shorten", handlerShorten)
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
 	 

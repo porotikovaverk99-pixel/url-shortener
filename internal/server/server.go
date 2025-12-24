@@ -25,6 +25,22 @@ func (s *Server) RegisterHandle(pattern string, handler http.Handler) {
 	s.router.Handle(pattern, handler)
 }
 
+func (s *Server) Post(pattern string, handler http.HandlerFunc) {
+	s.router.Post(pattern, handler)
+}
+
+func (s *Server) Get(pattern string, handler http.HandlerFunc) {
+	s.router.Get(pattern, handler)
+}
+
+func (s *Server) Put(pattern string, handler http.HandlerFunc) {
+	s.router.Put(pattern, handler)
+}
+
+func (s *Server) Delete(pattern string, handler http.HandlerFunc) {
+	s.router.Delete(pattern, handler)
+}
+
 func (s *Server) Run() error {
 	return http.ListenAndServe(s.addr, s.router)
 }
