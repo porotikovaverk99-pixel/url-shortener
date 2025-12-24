@@ -6,20 +6,41 @@ import (
 )
 
 type Server struct {
-	route *chi.Mux
+	router *chi.Mux
 	addr string
 }
 
-func New(handler http.HandlerFunc, addr string) *Server {
-	r := chi.NewRouter()
-	r.HandleFunc("/", handler)
-	r.HandleFunc("/{id}", handler)
+func New(addr string) *Server {
 	return &Server{
-		route: r,
+		router: chi.NewRouter(),
 		addr: addr, 
 	}
 }
 
+func (s *Server) RegisterHandler(pattern string, handler http.HandlerFunc) {
+	s.router.HandleFunc(pattern, handler)
+}
+
+func (s *Server) RegisterHandle(pattern string, handler http.Handler) {
+	s.router.Handle(pattern, handler)
+}
+
+func (s *Server) Post(pattern string, handler http.HandlerFunc) {
+	s.router.Post(pattern, handler)
+}
+
+func (s *Server) Get(pattern string, handler http.HandlerFunc) {
+	s.router.Get(pattern, handler)
+}
+
+func (s *Server) Put(pattern string, handler http.HandlerFunc) {
+	s.router.Put(pattern, handler)
+}
+
+func (s *Server) Delete(pattern string, handler http.HandlerFunc) {
+	s.router.Delete(pattern, handler)
+}
+
 func (s *Server) Run() error {
-	return http.ListenAndServe(s.addr, s.route)
+	return http.ListenAndServe(s.addr, s.router)
 }

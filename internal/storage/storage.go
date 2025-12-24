@@ -8,7 +8,8 @@ import (
 
 var (
     ErrURLNotFound      = errors.New("URL not found")
-    ErrURLAlreadyExists = errors.New("URL already exists")
+	ErrIDNotFound      = errors.New("ID not found")
+    ErrIDAlreadyExists = errors.New("URL already exists")
 )
 
 type MemoryStorage struct {
@@ -25,13 +26,14 @@ func NewMemoryStorage() *MemoryStorage {
 type URLStorage interface {
 	Save(ctx context.Context, short string, original string) error
 	Get(ctx context.Context, short string) (string, error)
+	FindIDByURL(ctx context.Context, url string) (string, error)
 }
 
 func (ms *MemoryStorage) Save(ctx context.Context, short string, original string) error {
 	ms.mu.Lock() 
     defer ms.mu.Unlock()
 	if _, ok := ms.data[short]; ok {
-		return ErrURLAlreadyExists
+		return ErrIDAlreadyExists
 	}
 	ms.data[short] = original
 	return nil
@@ -44,4 +46,15 @@ func (ms *MemoryStorage) Get(ctx context.Context, short string) (string, error) 
 		return original, nil
 	}
 	return "", ErrURLNotFound
+}
+
+func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, error) {
+	ms.mu.RLock()
+    defer ms.mu.RUnlock()
+	for k, v := range ms.data {
+		if v == url {
+			return k, nil
+		}
+	}
+	return "", ErrIDNotFound
 }
