@@ -20,8 +20,15 @@ func main() {
 	}
 
 	storage := storage.NewMemoryStorage()
-	handler := logger.RequestLogger(handlers.URLHandler(storage, cfg.BaseURL))
-	server := server.New(handler, cfg.RunAddr)
+	
+	server := server.New(cfg.RunAddr)
+
+	handlerMain := logger.RequestLogger(handlers.URLHandler(storage, cfg.BaseURL))
+	handlerShorten := logger.RequestLogger(handlers.URLHandlerShorten(storage, cfg.BaseURL))
+
+	server.RegisterHandler("/", handlerMain)
+	server.RegisterHandler("/{id}", handlerMain)
+	server.RegisterHandler("/api/shorten", handlerShorten)
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
 	 
