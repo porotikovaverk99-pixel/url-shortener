@@ -12,7 +12,7 @@ import (
 )
 
 type RequestShorten struct {
-	Url string `json:"url"`
+	URL string `json:"url"`
 }
 
 type ResponseShorten struct {
@@ -135,12 +135,12 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.HandlerFunc
 			return
 		}
 
-		if reqs.Url == "" {
+		if reqs.URL == "" {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
 
-		id, statusText, status := processURL(r.Context(), storage, reqs.Url)
+		id, statusText, status := processURL(r.Context(), storage, reqs.URL)
 
 		if status != http.StatusOK && status != http.StatusCreated {
 			http.Error(w, statusText, status)
