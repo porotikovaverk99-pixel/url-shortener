@@ -17,11 +17,11 @@ func New(addr string) *Server {
 	}
 }
 
-func (s *Server) RegisterHandler(pattern string, handler http.HandlerFunc) {
+func (s *Server) HandleFunc(pattern string, handler http.HandlerFunc) {
 	s.router.HandleFunc(pattern, handler)
 }
 
-func (s *Server) RegisterHandle(pattern string, handler http.Handler) {
+func (s *Server) Handle(pattern string, handler http.Handler) {
 	s.router.Handle(pattern, handler)
 }
 

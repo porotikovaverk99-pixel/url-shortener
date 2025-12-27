@@ -62,9 +62,9 @@ func processURL(ctx context.Context, storage strg.URLStorage, url string) (strin
 	return id, "", status
 }
 
-func URLHandler(storage strg.URLStorage, baseURL string) http.HandlerFunc {
+func URLHandler(storage strg.URLStorage, baseURL string) http.Handler {
 
-	return func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         if r.Method == http.MethodGet {
 
 			id := chi.URLParam(r, "id")
@@ -112,12 +112,12 @@ func URLHandler(storage strg.URLStorage, baseURL string) http.HandlerFunc {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 
 		} 
-	} 
+	})
 }
 
-func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.HandlerFunc {
+func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 
-	return func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		defer r.Body.Close()
 
@@ -159,7 +159,7 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.HandlerFunc
 			return
 		}
 
-	} 
+	})
 }
 
 
