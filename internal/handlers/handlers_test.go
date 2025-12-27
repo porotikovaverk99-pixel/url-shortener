@@ -9,11 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/require"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
-	"github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
+	packgzip "github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
 	"github.com/go-chi/chi/v5"
 	"context"
 	"encoding/json"
 	"compress/gzip"
+	"bytes"
 )
 
 func TestURLHandler(t *testing.T) {
@@ -138,9 +139,9 @@ func TestURLHandler(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r := chi.NewRouter()
 			handler := URLHandler(test.storage, test.baseURL)
-			r.Post("/", handler)
-			r.Get("/{id}", handler)
-			r.HandleFunc("/*", handler)
+			r.Post("/", handler.ServeHTTP)
+			r.Get("/{id}", handler.ServeHTTP)
+			r.HandleFunc("/*", handler.ServeHTTP)
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()
@@ -249,7 +250,7 @@ func TestURLHandlerShorten(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r := chi.NewRouter()
 			handler := URLHandlerShorten(test.storage, test.baseURL)
-			r.Post("/api/shorten", handler)
+			r.Post("/api/shorten", handler.ServeHTTP)
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()
@@ -300,16 +301,18 @@ func TestURLHandlerShorten(t *testing.T) {
 
 func TestGzipCompression(t *testing.T) {
 
-	handler := gzip.GzipMiddleware(URLHandlerShorten)
 	storage := func() storage.URLStorage {
 				stor := storage.NewMemoryStorage()
 				stor.Save(context.Background(), "abcdef", "google.ru")
 				return stor
-			}(),
+			}()
 
 	r := chi.NewRouter()
 	handler := URLHandlerShorten(storage, "http://localhost:8080")
-	r.Post("/api/shorten", handler)
+
+	handlerMiddleware := packgzip.GzipMiddleware(handler)
+
+	r.Post("/api/shorten", handlerMiddleware.ServeHTTP)
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()
@@ -319,7 +322,7 @@ func TestGzipCompression(t *testing.T) {
     }`
 
     successBody := `{
-        "result": "https://localhost:8080/abcdef"
+        "result": "http://localhost:8080/abcdef"
     }`
     
     t.Run("sends_gzip", func(t *testing.T) {
@@ -331,12 +334,13 @@ func TestGzipCompression(t *testing.T) {
         err = zb.Close()
         require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPOST, srv.URL + "/api/shorten", buf)
-
-		req.Header.Set("Content-Encoding", "gzip")
-        req.Header.Set("Accept-Encoding", "")
+		req, err := http.NewRequest(http.MethodPost, srv.URL + "/api/shorten", buf)
 
 		require.NoError(t, err)
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+        req.Header.Set("Accept-Encoding", "")
 
 		client := &http.Client{
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -348,7 +352,7 @@ func TestGzipCompression(t *testing.T) {
 			
 		defer res.Body.Close() 
 
-        require.Equal(t, http.StatusCreated, res.StatusCode)
+        require.Equal(t, http.StatusOK, res.StatusCode)
         
         b, err := io.ReadAll(res.Body)
         require.NoError(t, err)
@@ -359,13 +363,22 @@ func TestGzipCompression(t *testing.T) {
     t.Run("accepts_gzip", func(t *testing.T) {
 
 		buf := bytes.NewBufferString(requestBody)
-        req := httptest.NewRequest(http.MethodPost, srv.URL + "/api/shorten", buf)
+        req, err := http.NewRequest(http.MethodPost, srv.URL + "/api/shorten", buf)
 
+		require.NoError(t, err)
+
+		req.Header.Set("Content-Type", "application/json")
         req.Header.Set("Accept-Encoding", "gzip")
         
-        res, err := http.DefaultClient.Do(r)
+        client := &http.Client{
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		} 
+		res, err := client.Do(req)
+
         require.NoError(t, err)
-        require.Equal(t, http.StatusCreated, res.StatusCode)
+        require.Equal(t, http.StatusOK, res.StatusCode)
         
         defer res.Body.Close()
         
