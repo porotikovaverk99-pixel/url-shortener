@@ -20,7 +20,10 @@ func main() {
 		panic("Error ocurs while initializing logger: " + err.Error())
 	}
 
-	storage := storage.NewMemoryStorage()
+	storage, err := storage.NewMemoryStorage(cfg.FileStoragePath)
+	if err != nil {
+		panic("Error ocurs while initializing storage: " + err.Error())
+	}
 	
 	server := server.New(cfg.RunAddr)
 
@@ -33,7 +36,7 @@ func main() {
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
 	 
-	err := server.Run() 
+	err = server.Run() 
 	if err != nil {
 		panic("Error occurs while running server: " + err.Error())
 	} 

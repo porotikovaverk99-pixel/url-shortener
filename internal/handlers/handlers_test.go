@@ -15,6 +15,8 @@ import (
 	"encoding/json"
 	"compress/gzip"
 	"bytes"
+	"io/ioutil"
+	"os"
 )
 
 func TestURLHandler(t *testing.T) {
@@ -39,7 +41,6 @@ func TestURLHandler(t *testing.T) {
 			url: "/",
 			method: http.MethodPost,
 			body: strings.NewReader("google.ru"),
-			storage: storage.NewMemoryStorage(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 201,
@@ -52,11 +53,6 @@ func TestURLHandler(t *testing.T) {
 			url: "/",
 			method: http.MethodPost,
 			body: strings.NewReader("google.ru"),
-			storage: func() storage.URLStorage {
-				stor := storage.NewMemoryStorage()
-				stor.Save(context.Background(), "abcdef", "google.ru")
-				return stor
-			}(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 200,
@@ -69,7 +65,6 @@ func TestURLHandler(t *testing.T) {
 			url: "/",
 			method: http.MethodPost,
 			body: strings.NewReader(""),
-			storage: storage.NewMemoryStorage(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 400,
@@ -82,11 +77,6 @@ func TestURLHandler(t *testing.T) {
 			url: "/abcdef",
 			method: http.MethodGet,
 			body: nil,
-			storage: func() storage.URLStorage {
-				stor := storage.NewMemoryStorage()
-				stor.Save(context.Background(), "abcdef", "yandex.ru")
-				return stor
-			}(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 307,
@@ -99,7 +89,6 @@ func TestURLHandler(t *testing.T) {
 			url: "/aaaaaa",
 			method: http.MethodGet,
 			body: nil,
-			storage: storage.NewMemoryStorage(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 404,
@@ -112,7 +101,6 @@ func TestURLHandler(t *testing.T) {
 			url: "/",
 			method: http.MethodGet,
 			body: nil,
-			storage: storage.NewMemoryStorage(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 400,
@@ -125,7 +113,6 @@ func TestURLHandler(t *testing.T) {
 			url: "/",
 			method: http.MethodPut,
 			body: nil,
-			storage: storage.NewMemoryStorage(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 405,
@@ -137,8 +124,23 @@ func TestURLHandler(t *testing.T) {
 	
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			tmpfile, err := ioutil.TempFile("", "test-*.json")
+			require.NoError(t, err)
+			tmpfile.Close()
+			defer os.Remove(tmpfile.Name())
+			
+			storage, err := storage.NewMemoryStorage(tmpfile.Name())
+			require.NoError(t, err)
+
+			if test.name == "test POST url exists" {
+				storage.Save(context.Background(), "abcdef", "google.ru")
+			}
+			if test.name == "test GET" {
+				storage.Save(context.Background(), "abcdef", "yandex.ru")
+			}
+			
 			r := chi.NewRouter()
-			handler := URLHandler(test.storage, test.baseURL)
+			handler := URLHandler(storage, test.baseURL)
 			r.Post("/", handler.ServeHTTP)
 			r.Get("/{id}", handler.ServeHTTP)
 			r.HandleFunc("/*", handler.ServeHTTP)
@@ -166,7 +168,7 @@ func TestURLHandler(t *testing.T) {
 				responseURL := string(body)
 				parts := strings.Split(responseURL, "/")
 				short := parts[len(parts)-1]   
-				original, err := test.storage.Get(context.Background(), short)
+				original, err := storage.Get(context.Background(), short)
 				assert.NoError(t, err)
 				assert.Equal(t, "google.ru", original)
 			} 
@@ -190,7 +192,6 @@ func TestURLHandlerShorten(t *testing.T) {
 		method string
 		body io.Reader
 		headers map[string]string
-		storage storage.URLStorage
 		baseURL string
 		want want
 	} {
@@ -202,7 +203,6 @@ func TestURLHandlerShorten(t *testing.T) {
 			headers: map[string]string{
                 "Content-Type": "application/json",
             },
-			storage: storage.NewMemoryStorage(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 201,
@@ -218,11 +218,6 @@ func TestURLHandlerShorten(t *testing.T) {
 			headers: map[string]string{
                 "Content-Type": "application/json",  
             },
-			storage: func() storage.URLStorage {
-				stor := storage.NewMemoryStorage()
-				stor.Save(context.Background(), "abcdef", "google.ru")
-				return stor
-			}(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 200,
@@ -236,7 +231,6 @@ func TestURLHandlerShorten(t *testing.T) {
 			method: http.MethodGet,
 			body: nil,
 			headers: map[string]string{},
-			storage: storage.NewMemoryStorage(),
 			baseURL: "http://localhost:8080",
 			want: want {
 				statusCode: 405,
@@ -248,8 +242,20 @@ func TestURLHandlerShorten(t *testing.T) {
 	
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			tmpfile, err := ioutil.TempFile("", "test-*.json")
+			require.NoError(t, err)
+			tmpfile.Close()
+			defer os.Remove(tmpfile.Name())
+			
+			storage, err := storage.NewMemoryStorage(tmpfile.Name())
+			require.NoError(t, err)
+
+			if test.name == "test POST url exists" {
+				storage.Save(context.Background(), "abcdef", "google.ru")
+			}
+			
 			r := chi.NewRouter()
-			handler := URLHandlerShorten(test.storage, test.baseURL)
+			handler := URLHandlerShorten(storage, test.baseURL)
 			r.Post("/api/shorten", handler.ServeHTTP)
 
 			ts := httptest.NewServer(r)
@@ -288,7 +294,7 @@ func TestURLHandlerShorten(t *testing.T) {
 
 				parts := strings.Split(responseURL, "/")
 				short := parts[len(parts)-1]   
-				original, err := test.storage.Get(context.Background(), short)
+				original, err := storage.Get(context.Background(), short)
 				assert.NoError(t, err)
 				assert.Equal(t, "google.ru", original)
 			} 
@@ -301,11 +307,15 @@ func TestURLHandlerShorten(t *testing.T) {
 
 func TestGzipCompression(t *testing.T) {
 
-	storage := func() storage.URLStorage {
-				stor := storage.NewMemoryStorage()
-				stor.Save(context.Background(), "abcdef", "google.ru")
-				return stor
-			}()
+	tmpfile, err := ioutil.TempFile("", "test-*.json")
+	require.NoError(t, err)
+	tmpfile.Close()
+	defer os.Remove(tmpfile.Name())
+	
+	storage, err := storage.NewMemoryStorage(tmpfile.Name())
+	require.NoError(t, err)
+
+	storage.Save(context.Background(), "abcdef", "google.ru")
 
 	r := chi.NewRouter()
 	handler := URLHandlerShorten(storage, "http://localhost:8080")
