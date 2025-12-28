@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"io"
 	"strings"
 	"testing"
 	"net/http"
@@ -15,7 +14,7 @@ import (
 	"encoding/json"
 	"compress/gzip"
 	"bytes"
-	"io/ioutil"
+	"io"
 	"os"
 )
 
@@ -124,7 +123,7 @@ func TestURLHandler(t *testing.T) {
 	
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmpfile, err := ioutil.TempFile("", "test-*.json")
+			tmpfile, err := os.CreateTemp("", "test-*.json")
 			require.NoError(t, err)
 			tmpfile.Close()
 			defer os.Remove(tmpfile.Name())
@@ -242,7 +241,7 @@ func TestURLHandlerShorten(t *testing.T) {
 	
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmpfile, err := ioutil.TempFile("", "test-*.json")
+			tmpfile, err := os.CreateTemp("", "test-*.json")
 			require.NoError(t, err)
 			tmpfile.Close()
 			defer os.Remove(tmpfile.Name())
@@ -307,7 +306,7 @@ func TestURLHandlerShorten(t *testing.T) {
 
 func TestGzipCompression(t *testing.T) {
 
-	tmpfile, err := ioutil.TempFile("", "test-*.json")
+	tmpfile, err := os.CreateTemp("", "test-*.json")
 	require.NoError(t, err)
 	tmpfile.Close()
 	defer os.Remove(tmpfile.Name())
