@@ -23,9 +23,10 @@ func NewPostgresStorage(dsn string) (*PostgresStorage, error) {
 
 	_, err = pool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS urls (
-			short_id VARCHAR(50) PRIMARY KEY,
-			original_url TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			id SERIAL PRIMARY KEY,
+    		short_url VARCHAR(50) UNIQUE NOT NULL,
+    		original_url TEXT NOT NULL,
+    		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`)
 	if err != nil {
@@ -36,19 +37,27 @@ func NewPostgresStorage(dsn string) (*PostgresStorage, error) {
 }
 
 func (ps *PostgresStorage) Save(ctx context.Context, shortID, originalURL string) error {
-	_, err := ps.pool.Exec(ctx,
-		"INSERT INTO urls (short_id, original_url) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+	commandTag, err := ps.pool.Exec(ctx,
+		`INSERT INTO urls (short_url, original_url) 
+         VALUES ($1, $2) 
+         ON CONFLICT (short_url) DO NOTHING`,
 		shortID, originalURL)
+
 	if err != nil {
 		return err
 	}
+
+	if commandTag.RowsAffected() == 0 {
+		return ErrIDAlreadyExists
+	}
+
 	return nil
 }
 
 func (ps *PostgresStorage) Get(ctx context.Context, shortID string) (string, error) {
 	var originalURL string
 	err := ps.pool.QueryRow(ctx,
-		"SELECT original_url FROM urls WHERE short_id = $1", shortID).Scan(&originalURL)
+		"SELECT original_url FROM urls WHERE short_url = $1", shortID).Scan(&originalURL)
 	if err != nil {
 		return "", ErrURLNotFound
 	}
@@ -56,13 +65,13 @@ func (ps *PostgresStorage) Get(ctx context.Context, shortID string) (string, err
 }
 
 func (ps *PostgresStorage) FindIDByURL(ctx context.Context, url string) (string, error) {
-	var shortID string
+	var shortURL string
 	err := ps.pool.QueryRow(ctx,
-		"SELECT short_id FROM urls WHERE original_url = $1", url).Scan(&shortID)
+		"SELECT short_url FROM urls WHERE original_url = $1", url).Scan(&shortURL)
 	if err != nil {
 		return "", ErrIDNotFound
 	}
-	return shortID, nil
+	return shortURL, nil
 }
 
 func (ps *PostgresStorage) Ping(ctx context.Context) error {
