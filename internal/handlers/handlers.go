@@ -164,3 +164,23 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 
 	})
 }
+
+func URLHandlerPing(storage strg.URLStorage, baseURL string) http.Handler {
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		if r.Method != http.MethodPost {
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
+		}
+
+		err := storage.Ping(r.Context())
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+
+	})
+}
