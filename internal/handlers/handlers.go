@@ -1,39 +1,81 @@
 package handlers
 
 import (
-    "net/http"
-    "io"
-    "math/rand"
-	strg "github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
-	"github.com/go-chi/chi/v5"
+	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"math/rand"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	strg "github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 )
 
-func generateShortID(l int) string {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    result := make([]byte, l) 
-    for i := range result {
-        result[i] = chars[rand.Intn(len(chars))]
-    }
-    return string(result)
+type RequestShorten struct {
+	URL string `json:"url"`
 }
 
-func URLHandler(storage strg.URLStorage, baseURL string) http.HandlerFunc {
+type ResponseShorten struct {
+	Result string `json:"result"`
+}
 
-	return func(w http.ResponseWriter, r *http.Request) {
-        if r.Method == http.MethodGet {
+func generateShortID(l int) string {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, l)
+	for i := range result {
+		result[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(result)
+}
+
+func processURL(ctx context.Context, storage strg.URLStorage, url string) (string, string, int) {
+
+	foundID, err := storage.FindIDByURL(ctx, url)
+
+	if err == nil {
+
+		return foundID, "", http.StatusOK
+
+	} else {
+
+		if !errors.Is(err, strg.ErrIDNotFound) {
+			return "", http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
+		}
+
+		id := generateShortID(8)
+		err := storage.Save(ctx, id, url)
+
+		if err != nil {
+			if errors.Is(err, strg.ErrIDAlreadyExists) {
+				return "", http.StatusText(http.StatusConflict), http.StatusConflict
+			} else {
+				return "", http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
+			}
+		}
+
+		return id, "", http.StatusCreated
+
+	}
+
+}
+
+func URLHandler(storage strg.URLStorage, baseURL string) http.Handler {
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
 
 			id := chi.URLParam(r, "id")
 			if id == "" {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
 			}
 			originalURL, err := storage.Get(r.Context(), id)
 			if err != nil {
 				if errors.Is(err, strg.ErrURLNotFound) {
-					http.Error(w, "Not found", http.StatusNotFound)
+					http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 				} else {
-					http.Error(w, "Server error", http.StatusInternalServerError)
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				}
 				return
 			}
@@ -44,35 +86,81 @@ func URLHandler(storage strg.URLStorage, baseURL string) http.HandlerFunc {
 
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
 			}
 			originalURL := string(body)
 			if originalURL == "" {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
 			}
-			id := generateShortID(8)
-			err = storage.Save(r.Context(), id, originalURL)
-			if err != nil {
-				if errors.Is(err, strg.ErrURLAlreadyExists) {
-					http.Error(w, "Conflict", http.StatusConflict)
-				} else {
-					http.Error(w, "Server error", http.StatusInternalServerError)
-				}
+			id, statusText, status := processURL(r.Context(), storage, originalURL)
+
+			if status != http.StatusOK && status != http.StatusCreated {
+				http.Error(w, statusText, status)
 				return
 			}
+
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			w.WriteHeader(http.StatusCreated)
+			w.WriteHeader(status)
 			w.Write([]byte(baseURL + "/" + id))
 
 		} else {
 
-			http.Error(w, "Bad Request", http.StatusBadRequest)
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 
-		} 
-	} 
+		}
+	})
 }
 
+func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
+		if r.Method != http.MethodPost {
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
+		}
+
+		defer r.Body.Close()
+
+		contentType := r.Header.Get("Content-Type")
+
+		if contentType != "application/json" {
+			http.Error(w, http.StatusText(http.StatusUnsupportedMediaType), http.StatusUnsupportedMediaType)
+			return
+		}
+
+		var reqs RequestShorten
+
+		if err := json.NewDecoder(r.Body).Decode(&reqs); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		if reqs.URL == "" {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		id, statusText, status := processURL(r.Context(), storage, reqs.URL)
+
+		if status != http.StatusOK && status != http.StatusCreated {
+			http.Error(w, statusText, status)
+			return
+		}
+
+		ress := ResponseShorten{
+			Result: baseURL + "/" + id,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+
+		if err := json.NewEncoder(w).Encode(ress); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+	})
+}
