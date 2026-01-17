@@ -169,8 +169,8 @@ func URLHandlerPing(storage strg.URLStorage, baseURL string) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		if r.Method != http.MethodPost {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		if r.Method != http.MethodGet {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
 
