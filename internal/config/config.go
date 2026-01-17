@@ -21,7 +21,7 @@ func ParseFlags() Config {
 	flag.StringVar(&cfg.BaseURL, "b", "", "base URL for shortened URLs")
 	flag.StringVar(&cfg.LogLevel, "l", "Info", "log level")
 	flag.StringVar(&cfg.FileStoragePath, "f", "storage.json", "file storage path")
-	flag.StringVar(&cfg.DatabaseDSN, "d", "postgres://postgres:123@localhost:5432/url_shortener?sslmode=disable", "database dsn")
+	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database dsn")
 	flag.Parse()
 
 	if sa := os.Getenv("SERVER_ADDRESS"); sa != "" {
