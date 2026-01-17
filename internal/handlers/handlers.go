@@ -1,14 +1,15 @@
 package handlers
 
 import (
-    "net/http"
-    "io"
-    "math/rand"
-	strg "github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
-	"github.com/go-chi/chi/v5"
+	"context"
 	"encoding/json"
 	"errors"
-	"context"
+	"io"
+	"math/rand"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	strg "github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
 )
 
 type RequestShorten struct {
@@ -20,64 +21,61 @@ type ResponseShorten struct {
 }
 
 func generateShortID(l int) string {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    result := make([]byte, l) 
-    for i := range result {
-        result[i] = chars[rand.Intn(len(chars))]
-    }
-    return string(result)
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, l)
+	for i := range result {
+		result[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(result)
 }
 
 func processURL(ctx context.Context, storage strg.URLStorage, url string) (string, string, int) {
-	
-	var id string
-	var status int
 
 	foundID, err := storage.FindIDByURL(ctx, url)
 
 	if err == nil {
 
-		status = http.StatusOK
-		id = foundID
+		return foundID, "", http.StatusOK
 
 	} else {
 
 		if !errors.Is(err, strg.ErrIDNotFound) {
-			return "", "Internal Server Error", http.StatusInternalServerError
+			return "", http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
 		}
 
-		id = generateShortID(8)
+		id := generateShortID(8)
 		err := storage.Save(ctx, id, url)
 
 		if err != nil {
 			if errors.Is(err, strg.ErrIDAlreadyExists) {
-				return "", "Conflict", http.StatusConflict
+				return "", http.StatusText(http.StatusConflict), http.StatusConflict
 			} else {
-				return "", "Internal Server Error", http.StatusInternalServerError
+				return "", http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
 			}
 		}
-		status = http.StatusCreated
+
+		return id, "", http.StatusCreated
+
 	}
 
-	return id, "", status
 }
 
 func URLHandler(storage strg.URLStorage, baseURL string) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        if r.Method == http.MethodGet {
+		if r.Method == http.MethodGet {
 
 			id := chi.URLParam(r, "id")
 			if id == "" {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
 			}
 			originalURL, err := storage.Get(r.Context(), id)
 			if err != nil {
 				if errors.Is(err, strg.ErrURLNotFound) {
-					http.Error(w, "Not found", http.StatusNotFound)
+					http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 				} else {
-					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				}
 				return
 			}
@@ -88,12 +86,12 @@ func URLHandler(storage strg.URLStorage, baseURL string) http.Handler {
 
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
 			}
 			originalURL := string(body)
 			if originalURL == "" {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
 			}
 			id, statusText, status := processURL(r.Context(), storage, originalURL)
@@ -109,9 +107,9 @@ func URLHandler(storage strg.URLStorage, baseURL string) http.Handler {
 
 		} else {
 
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 
-		} 
+		}
 	})
 }
 
@@ -119,24 +117,29 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
+		if r.Method != http.MethodPost {
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
+		}
+
 		defer r.Body.Close()
 
 		contentType := r.Header.Get("Content-Type")
 
 		if contentType != "application/json" {
-			http.Error(w, "Unsupported Media Type", http.StatusUnsupportedMediaType)
+			http.Error(w, http.StatusText(http.StatusUnsupportedMediaType), http.StatusUnsupportedMediaType)
 			return
 		}
 
-        var reqs RequestShorten
+		var reqs RequestShorten
 
 		if err := json.NewDecoder(r.Body).Decode(&reqs); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
 		if reqs.URL == "" {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
@@ -155,14 +158,9 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 		w.WriteHeader(status)
 
 		if err := json.NewEncoder(w).Encode(ress); err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
 	})
 }
-
-
-
-
-

@@ -2,18 +2,20 @@ package server
 
 import (
 	"net/http"
+	"time"
+
 	"github.com/go-chi/chi/v5"
 )
 
 type Server struct {
 	router *chi.Mux
-	addr string
+	addr   string
 }
 
 func New(addr string) *Server {
 	return &Server{
 		router: chi.NewRouter(),
-		addr: addr, 
+		addr:   addr,
 	}
 }
 
@@ -42,5 +44,14 @@ func (s *Server) Delete(pattern string, handler http.HandlerFunc) {
 }
 
 func (s *Server) Run() error {
-	return http.ListenAndServe(s.addr, s.router)
+	server := &http.Server{
+		Addr:              s.addr,
+		Handler:           s.router,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
+		ReadHeaderTimeout: 2 * time.Second,
+	}
+
+	return server.ListenAndServe()
 }
