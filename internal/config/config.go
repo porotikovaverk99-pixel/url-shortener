@@ -11,6 +11,7 @@ type Config struct {
 	BaseURL         string
 	LogLevel        string
 	FileStoragePath string
+	DatabaseDSN     string
 }
 
 func ParseFlags() Config {
@@ -20,6 +21,7 @@ func ParseFlags() Config {
 	flag.StringVar(&cfg.BaseURL, "b", "", "base URL for shortened URLs")
 	flag.StringVar(&cfg.LogLevel, "l", "Info", "log level")
 	flag.StringVar(&cfg.FileStoragePath, "f", "storage.json", "file storage path")
+	flag.StringVar(&cfg.DatabaseDSN, "d", "postgres://postgres:123@localhost:5432/url_shortener?sslmode=disable", "database dsn")
 	flag.Parse()
 
 	if sa := os.Getenv("SERVER_ADDRESS"); sa != "" {
@@ -36,6 +38,10 @@ func ParseFlags() Config {
 
 	if f := os.Getenv("FILE_STORAGE_PATH"); f != "" {
 		cfg.FileStoragePath = f
+	}
+
+	if dd := os.Getenv("DATABASE_DSN"); dd != "" {
+		cfg.DatabaseDSN = dd
 	}
 
 	if cfg.BaseURL == "" {

@@ -36,6 +36,7 @@ type URLStorage interface {
 	Save(ctx context.Context, short string, original string) error
 	Get(ctx context.Context, short string) (string, error)
 	FindIDByURL(ctx context.Context, url string) (string, error)
+	Ping(ctx context.Context) error
 }
 
 func (ms *MemoryStorage) Save(ctx context.Context, short string, original string) error {
@@ -74,6 +75,10 @@ func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, e
 		}
 	}
 	return "", ErrIDNotFound
+}
+
+func (ms *MemoryStorage) Ping(ctx context.Context) error {
+	return nil
 }
 
 type FileData struct {
