@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	strg "github.com/porotikovaverk99-pixel/url-shortener/internal/storage"
@@ -16,8 +17,18 @@ type RequestShorten struct {
 	URL string `json:"url"`
 }
 
+type RequestShortenBatch struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
 type ResponseShorten struct {
 	Result string `json:"result"`
+}
+
+type ResponseShortenBatch struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
 }
 
 func generateShortID(l int) string {
@@ -118,7 +129,7 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		if r.Method != http.MethodPost {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -126,7 +137,7 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 
 		contentType := r.Header.Get("Content-Type")
 
-		if contentType != "application/json" {
+		if !strings.HasPrefix(contentType, "application/json") {
 			http.Error(w, http.StatusText(http.StatusUnsupportedMediaType), http.StatusUnsupportedMediaType)
 			return
 		}
@@ -165,7 +176,103 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 	})
 }
 
-func URLHandlerPing(storage strg.URLStorage, baseURL string) http.Handler {
+func URLHandlerShortenBatch(storage strg.URLStorage, baseURL string) http.Handler {
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		if r.Method != http.MethodPost {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+
+		defer r.Body.Close()
+
+		contentType := r.Header.Get("Content-Type")
+
+		if !strings.HasPrefix(contentType, "application/json") {
+			http.Error(w, http.StatusText(http.StatusUnsupportedMediaType), http.StatusUnsupportedMediaType)
+			return
+		}
+
+		var reqsBatch []RequestShortenBatch
+
+		if err := json.NewDecoder(r.Body).Decode(&reqsBatch); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		if len(reqsBatch) == 0 {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		urls := make([]string, 0, len(reqsBatch))
+
+		for _, item := range reqsBatch {
+			if item.OriginalURL == "" {
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			}
+			urls = append(urls, item.OriginalURL)
+		}
+
+		foundIDs, err := storage.FindIDByURLs(r.Context(), urls)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		batch := []strg.BatchItem{}
+		ressBatch := make([]ResponseShortenBatch, 0, len(reqsBatch))
+		generatedIDs := make(map[string]bool)
+
+		for _, item := range reqsBatch {
+			if foundID, ok := foundIDs[item.OriginalURL]; ok {
+				ressBatch = append(ressBatch, ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: baseURL + "/" + foundID})
+			} else {
+				generatedId := generateShortID(8)
+				attempts := 0
+				for generatedIDs[generatedId] && attempts < 100 {
+					generatedId = generateShortID(8)
+					attempts++
+				}
+				if attempts >= 100 {
+					http.Error(w, "Failed to generate unique ID", http.StatusInternalServerError)
+					return
+				}
+				batch = append(batch, strg.BatchItem{ShortURL: generatedId, OriginalURL: item.OriginalURL})
+				ressBatch = append(ressBatch, ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: baseURL + "/" + generatedId})
+			}
+		}
+
+		err = storage.SaveBatch(r.Context(), batch)
+		if err != nil {
+			if errors.Is(err, strg.ErrIDAlreadyExists) {
+				http.Error(w, http.StatusText(http.StatusConflict), http.StatusConflict)
+				return
+			} else {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		var status int = http.StatusCreated
+		if len(foundIDs) == len(reqsBatch) {
+			status = http.StatusOK
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+
+		if err := json.NewEncoder(w).Encode(ressBatch); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+	})
+}
+
+func URLHandlerPing(storage strg.URLStorage) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 

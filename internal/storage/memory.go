@@ -43,6 +43,26 @@ func (ms *MemoryStorage) Save(ctx context.Context, short string, original string
 	return ms.WriteToFile(dataCopy)
 }
 
+func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []BatchItem) error {
+	ms.mu.Lock()
+	for _, item := range batch {
+		if _, ok := ms.data[item.ShortURL]; ok {
+			ms.mu.Unlock()
+			return ErrIDAlreadyExists
+		}
+		ms.data[item.ShortURL] = item.OriginalURL
+	}
+
+	dataCopy := make(map[string]string)
+	for k, v := range ms.data {
+		dataCopy[k] = v
+	}
+
+	ms.mu.Unlock()
+
+	return ms.WriteToFile(dataCopy)
+}
+
 func (ms *MemoryStorage) Get(ctx context.Context, short string) (string, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -61,6 +81,22 @@ func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, e
 		}
 	}
 	return "", ErrIDNotFound
+}
+
+func (ms *MemoryStorage) FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+
+	result := make(map[string]string)
+	for shortID, originalURL := range ms.data {
+		for _, url := range urls {
+			if originalURL == url {
+				result[originalURL] = shortID
+				break
+			}
+		}
+	}
+	return result, nil
 }
 
 func (ms *MemoryStorage) Ping(ctx context.Context) error {

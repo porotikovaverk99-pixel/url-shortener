@@ -39,12 +39,14 @@ func main() {
 
 	handlerMain := logger.RequestLogger(gzip.GzipMiddleware(handlers.URLHandler(urlStorage, cfg.BaseURL)))
 	handlerShorten := logger.RequestLogger(gzip.GzipMiddleware(handlers.URLHandlerShorten(urlStorage, cfg.BaseURL)))
-	handlerPing := logger.RequestLogger(gzip.GzipMiddleware(handlers.URLHandlerPing(urlStorage, cfg.BaseURL)))
+	handlerPing := logger.RequestLogger(gzip.GzipMiddleware(handlers.URLHandlerPing(urlStorage)))
+	handlerShortenBatch := logger.RequestLogger(gzip.GzipMiddleware(handlers.URLHandlerShortenBatch(urlStorage, cfg.BaseURL)))
 
 	server.HandleFunc("/", handlerMain.ServeHTTP)
 	server.HandleFunc("/{id}", handlerMain.ServeHTTP)
 	server.HandleFunc("/api/shorten", handlerShorten.ServeHTTP)
 	server.HandleFunc("/ping", handlerPing.ServeHTTP)
+	server.HandleFunc("/api/shorten/batch", handlerShortenBatch.ServeHTTP)
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
 
