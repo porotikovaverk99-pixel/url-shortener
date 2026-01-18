@@ -1,12 +1,22 @@
 [
   {
-    "uuid": "1",
-    "short_url": "rHLsdOaR",
-    "original_url": "http://ya.ru"
-  },
-  {
-    "uuid": "2",
+    "id": "1",
     "short_url": "amIp2uOQ",
     "original_url": "http://practicum.yandex.ru"
+  },
+  {
+    "id": "2",
+    "short_url": "M394cUM4",
+    "original_url": "andex.ru"
+  },
+  {
+    "id": "3",
+    "short_url": "UEilRBfi",
+    "original_url": "oo.ru"
+  },
+  {
+    "id": "4",
+    "short_url": "rHLsdOaR",
+    "original_url": "http://ya.ru"
   }
 ]
