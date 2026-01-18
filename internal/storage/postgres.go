@@ -125,11 +125,11 @@ func (ps *PostgresStorage) FindIDByURLs(ctx context.Context, urls []string) (map
 
 	result := make(map[string]string)
 	for rows.Next() {
-		var short_url, original_url string
-		if err := rows.Scan(&short_url, &original_url); err != nil {
+		var shortURL, originalURL string
+		if err := rows.Scan(&shortURL, &originalURL); err != nil {
 			return nil, err
 		}
-		result[original_url] = short_url
+		result[originalURL] = shortURL
 	}
 
 	if err := rows.Err(); err != nil {

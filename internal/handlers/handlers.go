@@ -230,18 +230,18 @@ func URLHandlerShortenBatch(storage strg.URLStorage, baseURL string) http.Handle
 			if foundID, ok := foundIDs[item.OriginalURL]; ok {
 				ressBatch = append(ressBatch, ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: baseURL + "/" + foundID})
 			} else {
-				generatedId := generateShortID(8)
+				generatedID := generateShortID(8)
 				attempts := 0
-				for generatedIDs[generatedId] && attempts < 100 {
-					generatedId = generateShortID(8)
+				for generatedIDs[generatedID] && attempts < 100 {
+					generatedID = generateShortID(8)
 					attempts++
 				}
 				if attempts >= 100 {
 					http.Error(w, "Failed to generate unique ID", http.StatusInternalServerError)
 					return
 				}
-				batch = append(batch, strg.BatchItem{ShortURL: generatedId, OriginalURL: item.OriginalURL})
-				ressBatch = append(ressBatch, ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: baseURL + "/" + generatedId})
+				batch = append(batch, strg.BatchItem{ShortURL: generatedID, OriginalURL: item.OriginalURL})
+				ressBatch = append(ressBatch, ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: baseURL + "/" + generatedID})
 			}
 		}
 
