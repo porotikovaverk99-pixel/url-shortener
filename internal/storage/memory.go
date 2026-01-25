@@ -29,8 +29,16 @@ func (ms *MemoryStorage) Save(ctx context.Context, short string, original string
 	ms.mu.Lock()
 	if _, ok := ms.data[short]; ok {
 		ms.mu.Unlock()
-		return ErrIDAlreadyExists
+		return fmt.Errorf("%w", ErrIDAlreadyExists)
 	}
+
+	for _, v := range ms.data {
+		if v == original {
+			ms.mu.Unlock()
+			return fmt.Errorf("%w", ErrURLAlreadyExists)
+		}
+	}
+
 	ms.data[short] = original
 
 	dataCopy := make(map[string]string)
@@ -48,7 +56,7 @@ func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []BatchItem) error
 	for _, item := range batch {
 		if _, ok := ms.data[item.ShortURL]; ok {
 			ms.mu.Unlock()
-			return ErrIDAlreadyExists
+			return fmt.Errorf("%w", ErrIDAlreadyExists)
 		}
 		ms.data[item.ShortURL] = item.OriginalURL
 	}
@@ -69,7 +77,7 @@ func (ms *MemoryStorage) Get(ctx context.Context, short string) (string, error) 
 	if original, ok := ms.data[short]; ok {
 		return original, nil
 	}
-	return "", ErrURLNotFound
+	return "", fmt.Errorf("%w", ErrURLNotFound)
 }
 
 func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, error) {
@@ -80,7 +88,7 @@ func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, e
 			return k, nil
 		}
 	}
-	return "", ErrIDNotFound
+	return "", fmt.Errorf("%w", ErrIDNotFound)
 }
 
 func (ms *MemoryStorage) FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error) {

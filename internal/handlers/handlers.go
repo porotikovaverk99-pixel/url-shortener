@@ -42,32 +42,24 @@ func generateShortID(l int) string {
 
 func processURL(ctx context.Context, storage strg.URLStorage, url string) (string, string, int) {
 
-	foundID, err := storage.FindIDByURL(ctx, url)
+	id := generateShortID(8)
+	err := storage.Save(ctx, id, url)
 
-	if err == nil {
-
-		return foundID, "", http.StatusOK
-
-	} else {
-
-		if !errors.Is(err, strg.ErrIDNotFound) {
-			return "", http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
-		}
-
-		id := generateShortID(8)
-		err := storage.Save(ctx, id, url)
-
-		if err != nil {
-			if errors.Is(err, strg.ErrIDAlreadyExists) {
-				return "", http.StatusText(http.StatusConflict), http.StatusConflict
-			} else {
+	if err != nil {
+		if errors.Is(err, strg.ErrIDAlreadyExists) {
+			return "", http.StatusText(http.StatusConflict), http.StatusConflict
+		} else if errors.Is(err, strg.ErrURLAlreadyExists) {
+			foundID, findErr := storage.FindIDByURL(ctx, url)
+			if findErr != nil {
 				return "", http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
 			}
+			return foundID, "", http.StatusConflict
+		} else {
+			return "", http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError
 		}
-
-		return id, "", http.StatusCreated
-
 	}
+
+	return id, "", http.StatusCreated
 
 }
 

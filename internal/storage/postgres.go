@@ -3,6 +3,11 @@ package storage
 import (
 	"context"
 
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,18 +42,26 @@ func NewPostgresStorage(dsn string) (*PostgresStorage, error) {
 }
 
 func (ps *PostgresStorage) Save(ctx context.Context, shortID, originalURL string) error {
-	commandTag, err := ps.pool.Exec(ctx,
+	_, err := ps.pool.Exec(ctx,
 		`INSERT INTO urls (short_url, original_url) 
-         VALUES ($1, $2) 
-         ON CONFLICT (short_url) DO NOTHING`,
+         VALUES ($1, $2)`,
 		shortID, originalURL)
 
 	if err != nil {
-		return err
-	}
 
-	if commandTag.RowsAffected() == 0 {
-		return ErrIDAlreadyExists
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+
+			if pgErr.Code == pgerrcode.UniqueViolation {
+				switch pgErr.ConstraintName {
+				case "urls_short_url_key":
+					return fmt.Errorf("failed to save URL: %w", ErrIDAlreadyExists)
+				case "idx_urls_original_url_unique":
+					return fmt.Errorf("failed to save URL: %w", ErrURLAlreadyExists)
+				}
+			}
+		}
+		return fmt.Errorf("failed to save URL: %w", err)
 	}
 
 	return nil
@@ -82,7 +95,7 @@ func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []BatchItem) err
 		}
 
 		if cmdTag.RowsAffected() == 0 {
-			return ErrIDAlreadyExists
+			return fmt.Errorf("%w", ErrIDAlreadyExists)
 		}
 
 	}
@@ -95,7 +108,7 @@ func (ps *PostgresStorage) Get(ctx context.Context, shortID string) (string, err
 	err := ps.pool.QueryRow(ctx,
 		"SELECT original_url FROM urls WHERE short_url = $1", shortID).Scan(&originalURL)
 	if err != nil {
-		return "", ErrURLNotFound
+		return "", fmt.Errorf("%w", ErrURLNotFound)
 	}
 	return originalURL, nil
 }
@@ -105,7 +118,7 @@ func (ps *PostgresStorage) FindIDByURL(ctx context.Context, url string) (string,
 	err := ps.pool.QueryRow(ctx,
 		"SELECT short_url FROM urls WHERE original_url = $1", url).Scan(&shortURL)
 	if err != nil {
-		return "", ErrIDNotFound
+		return "", fmt.Errorf("%w", ErrIDNotFound)
 	}
 	return shortURL, nil
 }

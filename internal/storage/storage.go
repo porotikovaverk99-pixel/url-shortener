@@ -6,9 +6,10 @@ import (
 )
 
 var (
-	ErrURLNotFound     = errors.New("URL not found")
-	ErrIDNotFound      = errors.New("ID not found")
-	ErrIDAlreadyExists = errors.New("URL already exists")
+	ErrURLNotFound      = errors.New("URL not found")
+	ErrIDNotFound       = errors.New("ID not found")
+	ErrIDAlreadyExists  = errors.New("ID already exists")
+	ErrURLAlreadyExists = errors.New("URL already exists")
 )
 
 type BatchItem struct {
