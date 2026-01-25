@@ -104,7 +104,7 @@ func URLHandler(storage strg.URLStorage, baseURL string) http.Handler {
 			}
 			id, statusText, status := processURL(r.Context(), storage, originalURL)
 
-			if status != http.StatusOK && status != http.StatusCreated {
+			if status == http.StatusInternalServerError {
 				http.Error(w, statusText, status)
 				return
 			}
@@ -153,7 +153,7 @@ func URLHandlerShorten(storage strg.URLStorage, baseURL string) http.Handler {
 
 		id, statusText, status := processURL(r.Context(), storage, reqs.URL)
 
-		if status != http.StatusOK && status != http.StatusCreated {
+		if status == http.StatusInternalServerError {
 			http.Error(w, statusText, status)
 			return
 		}

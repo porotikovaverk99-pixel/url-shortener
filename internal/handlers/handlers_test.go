@@ -402,3 +402,111 @@ func TestGzipCompression(t *testing.T) {
 
 	})
 }
+
+func TestURLHandlerShortenBatch(t *testing.T) {
+	type want struct {
+		statusCode  int
+		contentType string
+	}
+
+	tests := []struct {
+		name   string
+		method string
+		body   string
+		want   want
+	}{
+		{
+			name:   "test POST batch success",
+			method: http.MethodPost,
+			body: `[
+				{"correlation_id": "1", "original_url": "https://google.com"},
+				{"correlation_id": "2", "original_url": "https://yandex.ru"}
+			]`,
+			want: want{
+				statusCode:  http.StatusCreated,
+				contentType: "application/json",
+			},
+		},
+		{
+			name:   "test GET method not allowed",
+			method: http.MethodGet,
+			body:   "",
+			want: want{
+				statusCode:  http.StatusMethodNotAllowed,
+				contentType: "text/plain; charset=utf-8",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tmpfile, _ := os.CreateTemp("", "test-*.json")
+			tmpfile.Close()
+			defer os.Remove(tmpfile.Name())
+
+			storage, _ := storage.NewMemoryStorage(tmpfile.Name())
+
+			r := chi.NewRouter()
+			handler := URLHandlerShortenBatch(storage, "http://localhost:8080")
+			r.Post("/api/shorten/batch", handler.ServeHTTP)
+			r.HandleFunc("/api/shorten/batch", handler.ServeHTTP)
+
+			ts := httptest.NewServer(r)
+			defer ts.Close()
+
+			req, _ := http.NewRequest(test.method, ts.URL+"/api/shorten/batch", strings.NewReader(test.body))
+			req.Header.Set("Content-Type", "application/json")
+
+			client := &http.Client{}
+			res, _ := client.Do(req)
+			defer res.Body.Close()
+
+			assert.Equal(t, test.want.statusCode, res.StatusCode)
+			assert.Equal(t, test.want.contentType, res.Header.Get("Content-Type"))
+		})
+	}
+}
+
+func TestURLHandlerPing(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		want   int
+	}{
+		{
+			name:   "test GET ping success",
+			method: http.MethodGet,
+			want:   http.StatusOK,
+		},
+		{
+			name:   "test POST method not allowed",
+			method: http.MethodPost,
+			want:   http.StatusMethodNotAllowed,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tmpfile, _ := os.CreateTemp("", "test-*.json")
+			tmpfile.Close()
+			defer os.Remove(tmpfile.Name())
+
+			storage, _ := storage.NewMemoryStorage(tmpfile.Name())
+
+			r := chi.NewRouter()
+			handler := URLHandlerPing(storage)
+			r.Get("/ping", handler.ServeHTTP)
+			r.HandleFunc("/ping", handler.ServeHTTP)
+
+			ts := httptest.NewServer(r)
+			defer ts.Close()
+
+			req, _ := http.NewRequest(test.method, ts.URL+"/ping", nil)
+			client := &http.Client{}
+			res, _ := client.Do(req)
+			defer res.Body.Close()
+
+			assert.Equal(t, test.want, res.StatusCode)
+		})
+	}
+}

@@ -5,7 +5,12 @@ import (
 
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,27 +23,53 @@ type PostgresStorage struct {
 func NewPostgresStorage(dsn string) (*PostgresStorage, error) {
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
 	err = pool.Ping(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	_, err = pool.Exec(context.Background(), `
-		CREATE TABLE IF NOT EXISTS urls (
-			id SERIAL PRIMARY KEY,
-    		short_url VARCHAR(50) UNIQUE NOT NULL,
-    		original_url TEXT NOT NULL,
-    		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
+	err = runMigrations(dsn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return &PostgresStorage{pool: pool}, nil
+}
+
+func runMigrations(dsn string) error {
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	migrationsPath := filepath.Join(exeDir, "migrations")
+
+	if _, err := os.Stat(migrationsPath); os.IsNotExist(err) {
+		migrationsPath = "migrations"
+		if _, err := os.Stat(migrationsPath); os.IsNotExist(err) {
+			return fmt.Errorf("migrations directory not found: %w", err)
+		}
+	}
+
+	m, err := migrate.New(
+		"file://"+migrationsPath,
+		dsn,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create migrate instance: %w", err)
+	}
+	defer m.Close()
+
+	err = m.Up()
+	if err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to apply migrations: %w", err)
+	}
+
+	return nil
 }
 
 func (ps *PostgresStorage) Save(ctx context.Context, shortID, originalURL string) error {
@@ -56,7 +87,7 @@ func (ps *PostgresStorage) Save(ctx context.Context, shortID, originalURL string
 				switch pgErr.ConstraintName {
 				case "urls_short_url_key":
 					return fmt.Errorf("failed to save URL: %w", ErrIDAlreadyExists)
-				case "idx_urls_original_url_unique":
+				case "idx_urls_original_url":
 					return fmt.Errorf("failed to save URL: %w", ErrURLAlreadyExists)
 				}
 			}
