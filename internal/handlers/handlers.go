@@ -32,7 +32,7 @@ type ResponseShortenBatch struct {
 }
 
 type ResponseGetAll struct {
-	ShortID     string `json:"short_url"`
+	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 }
 
@@ -305,6 +305,12 @@ func URLGetAll(storage strg.URLStorage) http.Handler {
 		}
 
 		ressGetAll := make([]ResponseGetAll, 0, len(result))
+		for originalURL, shortURL := range result {
+			ressGetAll = append(ressGetAll, ResponseGetAll{
+				ShortURL:    shortURL,
+				OriginalURL: originalURL,
+			})
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
