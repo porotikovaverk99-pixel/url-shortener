@@ -440,11 +440,13 @@ func TestURLHandlerShortenBatch(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmpfile, _ := os.CreateTemp("", "test-*.json")
+			tmpfile, err := os.CreateTemp("", "test-*.json")
+			require.NoError(t, err)
 			tmpfile.Close()
 			defer os.Remove(tmpfile.Name())
 
-			storage, _ := storage.NewMemoryStorage(tmpfile.Name())
+			storage, err := storage.NewMemoryStorage(tmpfile.Name())
+			require.NoError(t, err)
 
 			r := chi.NewRouter()
 			handler := URLHandlerShortenBatch(storage, "http://localhost:8080")
@@ -454,11 +456,13 @@ func TestURLHandlerShortenBatch(t *testing.T) {
 			ts := httptest.NewServer(r)
 			defer ts.Close()
 
-			req, _ := http.NewRequest(test.method, ts.URL+"/api/shorten/batch", strings.NewReader(test.body))
+			req, err := http.NewRequest(test.method, ts.URL+"/api/shorten/batch", strings.NewReader(test.body))
+			require.NoError(t, err)
 			req.Header.Set("Content-Type", "application/json")
 
 			client := &http.Client{}
-			res, _ := client.Do(req)
+			res, err := client.Do(req)
+			require.NoError(t, err)
 			defer res.Body.Close()
 
 			assert.Equal(t, test.want.statusCode, res.StatusCode)
@@ -487,11 +491,13 @@ func TestURLHandlerPing(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmpfile, _ := os.CreateTemp("", "test-*.json")
+			tmpfile, err := os.CreateTemp("", "test-*.json")
+			require.NoError(t, err)
 			tmpfile.Close()
 			defer os.Remove(tmpfile.Name())
 
-			storage, _ := storage.NewMemoryStorage(tmpfile.Name())
+			storage, err := storage.NewMemoryStorage(tmpfile.Name())
+			require.NoError(t, err)
 
 			r := chi.NewRouter()
 			handler := URLHandlerPing(storage)
@@ -501,9 +507,11 @@ func TestURLHandlerPing(t *testing.T) {
 			ts := httptest.NewServer(r)
 			defer ts.Close()
 
-			req, _ := http.NewRequest(test.method, ts.URL+"/ping", nil)
+			req, err := http.NewRequest(test.method, ts.URL+"/ping", nil)
+			require.NoError(t, err)
 			client := &http.Client{}
-			res, _ := client.Do(req)
+			res, err := client.Do(req)
+			require.NoError(t, err)
 			defer res.Body.Close()
 
 			assert.Equal(t, test.want, res.StatusCode)
