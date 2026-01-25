@@ -177,3 +177,9 @@ func (ms *MemoryStorage) WriteToFile(data map[string]string) error {
 	return encoder.Encode(fileData)
 
 }
+
+func (ms *MemoryStorage) GetAll(ctx context.Context) (map[string]string, error) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	return ms.data, nil
+}

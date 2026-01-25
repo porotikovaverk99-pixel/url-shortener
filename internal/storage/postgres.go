@@ -155,3 +155,28 @@ func (ps *PostgresStorage) FindIDByURLs(ctx context.Context, urls []string) (map
 func (ps *PostgresStorage) Ping(ctx context.Context) error {
 	return ps.pool.Ping(ctx)
 }
+
+func (ps *PostgresStorage) GetAll(ctx context.Context) (map[string]string, error) {
+
+	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls")
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]string)
+	for rows.Next() {
+		var shortURL, originalURL string
+		if err := rows.Scan(&shortURL, &originalURL); err != nil {
+			return nil, err
+		}
+		result[originalURL] = shortURL
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}

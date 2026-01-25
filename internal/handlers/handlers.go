@@ -31,6 +31,11 @@ type ResponseShortenBatch struct {
 	ShortURL      string `json:"short_url"`
 }
 
+type ResponseGetAll struct {
+	ShortID     string `json:"short_url"`
+	OriginalURL string `json:"original_url"`
+}
+
 func generateShortID(l int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, l)
@@ -280,6 +285,34 @@ func URLHandlerPing(storage strg.URLStorage) http.Handler {
 		}
 
 		w.WriteHeader(http.StatusOK)
+
+	})
+}
+
+func URLGetAll(storage strg.URLStorage) http.Handler {
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		if r.Method != http.MethodGet {
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+
+		result, err := storage.GetAll(r.Context())
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		ressGetAll := make([]ResponseGetAll, 0, len(result))
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if err := json.NewEncoder(w).Encode(ressGetAll); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
 
 	})
 }

@@ -24,4 +24,5 @@ type URLStorage interface {
 	FindIDByURL(ctx context.Context, url string) (string, error)
 	FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error)
 	Ping(ctx context.Context) error
+	GetAll(ctx context.Context) (map[string]string, error)
 }
