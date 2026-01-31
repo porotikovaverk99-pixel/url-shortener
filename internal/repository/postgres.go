@@ -1,4 +1,4 @@
-package storage
+package repository
 
 import (
 	"context"
@@ -31,12 +31,53 @@ func NewPostgresStorage(dsn string) (*PostgresStorage, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	err = runMigrations(dsn)
+	needMigrations, err := checkIfMigrationsNeeded(pool)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
+		return nil, fmt.Errorf("failed to check migrations status: %w", err)
+	}
+
+	if needMigrations {
+		err = runMigrations(dsn)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply migrations: %w", err)
+		}
 	}
 
 	return &PostgresStorage{pool: pool}, nil
+}
+
+func checkIfMigrationsNeeded(pool *pgxpool.Pool) (bool, error) {
+
+	var schemaExists bool
+	err := pool.QueryRow(context.Background(),
+		`SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'schema_migrations'
+        )`).Scan(&schemaExists)
+
+	if err != nil {
+		return false, err
+	}
+
+	if !schemaExists {
+		return true, nil
+	}
+
+	var currentVersion uint
+	var dirty bool
+	err = pool.QueryRow(context.Background(),
+		`SELECT version, dirty FROM schema_migrations`).Scan(&currentVersion, &dirty)
+
+	if err != nil {
+		return false, err
+	}
+
+	if dirty {
+		return false, fmt.Errorf("migrations are in dirty state")
+	}
+
+	return false, nil
 }
 
 func runMigrations(dsn string) error {
@@ -115,18 +156,26 @@ func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []BatchItem) err
 	defer tx.Rollback(ctx)
 
 	for _, item := range batch {
-		cmdTag, err := tx.Exec(ctx,
+		_, err := tx.Exec(ctx,
 			`INSERT INTO urls (short_url, original_url) 
-         	VALUES ($1, $2) 
-         	ON CONFLICT (short_url) DO NOTHING`,
+         	VALUES ($1, $2)`,
 			item.ShortURL, item.OriginalURL)
 
 		if err != nil {
-			return err
-		}
 
-		if cmdTag.RowsAffected() == 0 {
-			return fmt.Errorf("%w", ErrIDAlreadyExists)
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) {
+
+				if pgErr.Code == pgerrcode.UniqueViolation {
+					switch pgErr.ConstraintName {
+					case "urls_short_url_key":
+						return fmt.Errorf("failed to save URL: %w", ErrIDAlreadyExists)
+					case "idx_urls_original_url":
+						return fmt.Errorf("failed to save URL: %w", ErrURLAlreadyExists)
+					}
+				}
+			}
+			return fmt.Errorf("failed to save URL: %w", err)
 		}
 
 	}
@@ -139,7 +188,7 @@ func (ps *PostgresStorage) Get(ctx context.Context, shortID string) (string, err
 	err := ps.pool.QueryRow(ctx,
 		"SELECT original_url FROM urls WHERE short_url = $1", shortID).Scan(&originalURL)
 	if err != nil {
-		return "", fmt.Errorf("%w", ErrURLNotFound)
+		return "", ErrURLNotFound
 	}
 	return originalURL, nil
 }
@@ -149,7 +198,7 @@ func (ps *PostgresStorage) FindIDByURL(ctx context.Context, url string) (string,
 	err := ps.pool.QueryRow(ctx,
 		"SELECT short_url FROM urls WHERE original_url = $1", url).Scan(&shortURL)
 	if err != nil {
-		return "", fmt.Errorf("%w", ErrIDNotFound)
+		return "", ErrIDNotFound
 	}
 	return shortURL, nil
 }

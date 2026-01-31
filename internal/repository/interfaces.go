@@ -1,4 +1,4 @@
-package storage
+package repository
 
 import (
 	"context"
@@ -17,7 +17,7 @@ type BatchItem struct {
 	OriginalURL string
 }
 
-type URLStorage interface {
+type URLRepository interface {
 	Save(ctx context.Context, short string, original string) error
 	SaveBatch(ctx context.Context, batch []BatchItem) error
 	Get(ctx context.Context, short string) (string, error)

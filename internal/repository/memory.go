@@ -1,4 +1,4 @@
-package storage
+package repository
 
 import (
 	"context"
@@ -27,16 +27,9 @@ func NewMemoryStorage(filePath string) (*MemoryStorage, error) {
 
 func (ms *MemoryStorage) Save(ctx context.Context, short string, original string) error {
 	ms.mu.Lock()
+	defer ms.mu.Unlock()
 	if _, ok := ms.data[short]; ok {
-		ms.mu.Unlock()
-		return fmt.Errorf("%w", ErrIDAlreadyExists)
-	}
-
-	for _, v := range ms.data {
-		if v == original {
-			ms.mu.Unlock()
-			return fmt.Errorf("%w", ErrURLAlreadyExists)
-		}
+		return ErrIDAlreadyExists
 	}
 
 	ms.data[short] = original
@@ -46,18 +39,13 @@ func (ms *MemoryStorage) Save(ctx context.Context, short string, original string
 		dataCopy[k] = v
 	}
 
-	ms.mu.Unlock()
-
 	return ms.WriteToFile(dataCopy)
 }
 
 func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []BatchItem) error {
 	ms.mu.Lock()
+	defer ms.mu.Unlock()
 	for _, item := range batch {
-		if _, ok := ms.data[item.ShortURL]; ok {
-			ms.mu.Unlock()
-			return fmt.Errorf("%w", ErrIDAlreadyExists)
-		}
 		ms.data[item.ShortURL] = item.OriginalURL
 	}
 
@@ -65,8 +53,6 @@ func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []BatchItem) error
 	for k, v := range ms.data {
 		dataCopy[k] = v
 	}
-
-	ms.mu.Unlock()
 
 	return ms.WriteToFile(dataCopy)
 }
@@ -77,7 +63,7 @@ func (ms *MemoryStorage) Get(ctx context.Context, short string) (string, error) 
 	if original, ok := ms.data[short]; ok {
 		return original, nil
 	}
-	return "", fmt.Errorf("%w", ErrURLNotFound)
+	return "", ErrURLNotFound
 }
 
 func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, error) {
@@ -88,7 +74,7 @@ func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, e
 			return k, nil
 		}
 	}
-	return "", fmt.Errorf("%w", ErrIDNotFound)
+	return "", ErrIDNotFound
 }
 
 func (ms *MemoryStorage) FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error) {
