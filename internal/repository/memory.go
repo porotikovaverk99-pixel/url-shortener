@@ -1,18 +1,13 @@
-package storage
+package repository
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"sync"
-)
 
-var (
-	ErrURLNotFound     = errors.New("URL not found")
-	ErrIDNotFound      = errors.New("ID not found")
-	ErrIDAlreadyExists = errors.New("URL already exists")
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 )
 
 type MemoryStorage struct {
@@ -32,18 +27,13 @@ func NewMemoryStorage(filePath string) (*MemoryStorage, error) {
 	return ms, nil
 }
 
-type URLStorage interface {
-	Save(ctx context.Context, short string, original string) error
-	Get(ctx context.Context, short string) (string, error)
-	FindIDByURL(ctx context.Context, url string) (string, error)
-}
-
 func (ms *MemoryStorage) Save(ctx context.Context, short string, original string) error {
 	ms.mu.Lock()
+	defer ms.mu.Unlock()
 	if _, ok := ms.data[short]; ok {
-		ms.mu.Unlock()
 		return ErrIDAlreadyExists
 	}
+
 	ms.data[short] = original
 
 	dataCopy := make(map[string]string)
@@ -51,7 +41,20 @@ func (ms *MemoryStorage) Save(ctx context.Context, short string, original string
 		dataCopy[k] = v
 	}
 
-	ms.mu.Unlock()
+	return ms.WriteToFile(dataCopy)
+}
+
+func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []model.BatchItem) error {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	for _, item := range batch {
+		ms.data[item.ShortURL] = item.OriginalURL
+	}
+
+	dataCopy := make(map[string]string)
+	for k, v := range ms.data {
+		dataCopy[k] = v
+	}
 
 	return ms.WriteToFile(dataCopy)
 }
@@ -74,6 +77,26 @@ func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, e
 		}
 	}
 	return "", ErrIDNotFound
+}
+
+func (ms *MemoryStorage) FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+
+	result := make(map[string]string)
+	for shortID, originalURL := range ms.data {
+		for _, url := range urls {
+			if originalURL == url {
+				result[originalURL] = shortID
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
+func (ms *MemoryStorage) Ping(ctx context.Context) error {
+	return nil
 }
 
 type FileData struct {
@@ -141,4 +164,10 @@ func (ms *MemoryStorage) WriteToFile(data map[string]string) error {
 
 	return encoder.Encode(fileData)
 
+}
+
+func (ms *MemoryStorage) GetAll(ctx context.Context) (map[string]string, error) {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+	return ms.data, nil
 }
