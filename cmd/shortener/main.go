@@ -1,7 +1,10 @@
 package main
 
 import (
+	"log"
+
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/config"
+	packgzip "github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
 	hdlr "github.com/porotikovaverk99-pixel/url-shortener/internal/handler"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/logger"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/repository"
@@ -15,8 +18,9 @@ func main() {
 	cfg := config.ParseFlags()
 
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
-		panic("Error ocurs while initializing logger: " + err.Error())
+		log.Fatalf("Failed to initialize logger: %v", err)
 	}
+	defer logger.Log.Sync()
 
 	var URLRepository repository.URLRepository
 	var err error
@@ -39,18 +43,24 @@ func main() {
 	URLService := service.NewURLService(URLRepository, cfg.BaseURL)
 	URLHandler := hdlr.NewURLHandler(URLService)
 
-	server.HandleFunc("/", URLHandler.BaseHandler().ServeHTTP)
-	server.HandleFunc("/{id}", URLHandler.BaseHandler().ServeHTTP)
-	server.HandleFunc("/api/shorten", URLHandler.ShortenHandler().ServeHTTP)
-	server.HandleFunc("/ping", URLHandler.PingHandler().ServeHTTP)
-	server.HandleFunc("/api/shorten/batch", URLHandler.ShortenBatchHandler().ServeHTTP)
-	server.HandleFunc("/api/getAll", URLHandler.GetAllHandler().ServeHTTP)
+	baseHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.BaseHandler()))
+	shortenHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.ShortenHandler()))
+	pingHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.PingHandler()))
+	batchHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.ShortenBatchHandler()))
+	getAllHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.GetAllHandler()))
+
+	server.HandleFunc("/", baseHandler.ServeHTTP)
+	server.HandleFunc("/{id}", baseHandler.ServeHTTP)
+	server.HandleFunc("/api/shorten", shortenHandler.ServeHTTP)
+	server.HandleFunc("/ping", pingHandler.ServeHTTP)
+	server.HandleFunc("/api/shorten/batch", batchHandler.ServeHTTP)
+	server.HandleFunc("/api/user/urls", getAllHandler.ServeHTTP)
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
 
 	err = server.Run()
 	if err != nil {
-		panic("Error occurs while running server: " + err.Error())
+		logger.Log.Fatal("Error occurs while running server", zap.Error(err))
 	}
 
 }

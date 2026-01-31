@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
 )
 
@@ -62,8 +63,13 @@ func (h *URLHandler) BaseHandler() http.Handler {
 
 			if err != nil {
 				switch err {
+				case service.ErrInvalidURL:
+					jsonError(w, "Invalid URL in request", http.StatusBadRequest)
 				case service.ErrURLAlreadyExists:
-					jsonError(w, "URL already exists", http.StatusConflict)
+					w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+					w.WriteHeader(http.StatusConflict)
+					w.Write([]byte(result))
+					return
 				case service.ErrIDAlreadyExists:
 					jsonError(w, "ID already exists", http.StatusConflict)
 				case service.ErrRepository:
@@ -104,7 +110,7 @@ func (h *URLHandler) ShortenHandler() http.Handler {
 			return
 		}
 
-		var reqs service.RequestShorten
+		var reqs model.RequestShorten
 
 		if err := json.NewDecoder(r.Body).Decode(&reqs); err != nil {
 			jsonError(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -118,7 +124,10 @@ func (h *URLHandler) ShortenHandler() http.Handler {
 			case service.ErrInvalidURL:
 				jsonError(w, "Invalid URL in request", http.StatusBadRequest)
 			case service.ErrURLAlreadyExists:
-				jsonError(w, "URL already exists", http.StatusConflict)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(result)
+				return
 			case service.ErrIDAlreadyExists:
 				jsonError(w, "ID already exists", http.StatusConflict)
 			case service.ErrRepository:
@@ -158,7 +167,7 @@ func (h *URLHandler) ShortenBatchHandler() http.Handler {
 			return
 		}
 
-		var reqsBatch []service.RequestShortenBatch
+		var reqsBatch []model.RequestShortenBatch
 
 		if err := json.NewDecoder(r.Body).Decode(&reqsBatch); err != nil {
 			jsonError(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -177,8 +186,6 @@ func (h *URLHandler) ShortenBatchHandler() http.Handler {
 				jsonError(w, "Missing correlation ID", http.StatusBadRequest)
 			case service.ErrFailedToGenerateID:
 				jsonError(w, "Failed to generate unique ID", http.StatusInternalServerError)
-			case service.ErrURLAlreadyExists:
-				jsonError(w, "URL already exists", http.StatusConflict)
 			case service.ErrIDAlreadyExists:
 				jsonError(w, "ID already exists", http.StatusConflict)
 			case service.ErrRepository:
@@ -190,9 +197,13 @@ func (h *URLHandler) ShortenBatchHandler() http.Handler {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
+		if result.CreatedNew {
+			w.WriteHeader(http.StatusCreated)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
 
-		if err := json.NewEncoder(w).Encode(result); err != nil {
+		if err := json.NewEncoder(w).Encode(result.Responses); err != nil {
 			jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}

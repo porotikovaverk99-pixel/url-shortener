@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,9 +10,8 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/jackc/pgerrcode"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 )
 
 type PostgresStorage struct {
@@ -114,32 +112,23 @@ func runMigrations(dsn string) error {
 }
 
 func (ps *PostgresStorage) Save(ctx context.Context, shortID, originalURL string) error {
-	_, err := ps.pool.Exec(ctx,
+	resTag, err := ps.pool.Exec(ctx,
 		`INSERT INTO urls (short_url, original_url) 
-         VALUES ($1, $2)`,
+         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
 		shortID, originalURL)
 
 	if err != nil {
-
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-
-			if pgErr.Code == pgerrcode.UniqueViolation {
-				switch pgErr.ConstraintName {
-				case "urls_short_url_key":
-					return fmt.Errorf("failed to save URL: %w", ErrIDAlreadyExists)
-				case "idx_urls_original_url":
-					return fmt.Errorf("failed to save URL: %w", ErrURLAlreadyExists)
-				}
-			}
-		}
 		return fmt.Errorf("failed to save URL: %w", err)
+	}
+
+	if resTag.RowsAffected() == 0 {
+		return ErrIDAlreadyExists
 	}
 
 	return nil
 }
 
-func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []BatchItem) error {
+func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []model.BatchItem) error {
 
 	conn, err := ps.pool.Acquire(ctx)
 	if err != nil {
@@ -156,26 +145,17 @@ func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []BatchItem) err
 	defer tx.Rollback(ctx)
 
 	for _, item := range batch {
-		_, err := tx.Exec(ctx,
+		resTag, err := tx.Exec(ctx,
 			`INSERT INTO urls (short_url, original_url) 
-         	VALUES ($1, $2)`,
+         	VALUES ($1, $2) ON CONFLICT DO NOTHING`,
 			item.ShortURL, item.OriginalURL)
 
 		if err != nil {
-
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) {
-
-				if pgErr.Code == pgerrcode.UniqueViolation {
-					switch pgErr.ConstraintName {
-					case "urls_short_url_key":
-						return fmt.Errorf("failed to save URL: %w", ErrIDAlreadyExists)
-					case "idx_urls_original_url":
-						return fmt.Errorf("failed to save URL: %w", ErrURLAlreadyExists)
-					}
-				}
-			}
 			return fmt.Errorf("failed to save URL: %w", err)
+		}
+
+		if resTag.RowsAffected() == 0 {
+			return ErrIDAlreadyExists
 		}
 
 	}

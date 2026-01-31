@@ -6,22 +6,20 @@ import (
 
 	"math/rand"
 
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/repository"
 )
 
 var (
-	// Валидация
 	ErrEmptyRequest         = errors.New("empty request")
 	ErrInvalidURL           = errors.New("invalid URL")
 	ErrMissingCorrelationID = errors.New("missing correlation ID")
 
-	// Бизнес-ошибки
 	ErrFailedToGenerateID = errors.New("failed to generate unique ID")
 	ErrURLAlreadyExists   = errors.New("URL already exists")
 	ErrIDAlreadyExists    = errors.New("ID already exists")
 	ErrURLNotFound        = errors.New("URL not found")
 
-	// Системные
 	ErrRepository = errors.New("repository error")
 )
 
@@ -37,29 +35,6 @@ func NewURLService(repo repository.URLRepository, baseURL string) *URLService {
 	}
 }
 
-type RequestShorten struct {
-	URL string `json:"url"`
-}
-
-type RequestShortenBatch struct {
-	CorrelationID string `json:"correlation_id"`
-	OriginalURL   string `json:"original_url"`
-}
-
-type ResponseShorten struct {
-	Result string `json:"result"`
-}
-
-type ResponseShortenBatch struct {
-	CorrelationID string `json:"correlation_id"`
-	ShortURL      string `json:"short_url"`
-}
-
-type ResponseGetAll struct {
-	ShortURL    string `json:"short_url"`
-	OriginalURL string `json:"original_url"`
-}
-
 func generateShortID(l int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, l)
@@ -71,19 +46,18 @@ func generateShortID(l int) string {
 
 func processURL(ctx context.Context, repo repository.URLRepository, url string) (string, error) {
 
+	foundID, err := repo.FindIDByURL(ctx, url)
+	if err == nil {
+		return foundID, ErrURLAlreadyExists
+	}
+
 	id := generateShortID(8)
-	err := repo.Save(ctx, id, url)
+	err = repo.Save(ctx, id, url)
 
 	if err != nil {
 		switch {
 		case errors.Is(err, repository.ErrIDAlreadyExists):
 			return "", ErrIDAlreadyExists
-		case errors.Is(err, repository.ErrURLAlreadyExists):
-			foundID, findErr := repo.FindIDByURL(ctx, url)
-			if findErr != nil {
-				return "", ErrRepository
-			}
-			return foundID, ErrURLAlreadyExists
 		default:
 			return "", ErrRepository
 		}
@@ -97,14 +71,14 @@ func (s *URLService) Ping(ctx context.Context) error {
 	return s.repo.Ping(ctx)
 }
 
-func (s *URLService) GetAll(ctx context.Context) ([]ResponseGetAll, error) {
+func (s *URLService) GetAll(ctx context.Context) ([]model.ResponseGetAll, error) {
 	result, err := s.repo.GetAll(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ressGetAll := make([]ResponseGetAll, 0, len(result))
+	ressGetAll := make([]model.ResponseGetAll, 0, len(result))
 	for originalURL, shortURL := range result {
-		ressGetAll = append(ressGetAll, ResponseGetAll{
+		ressGetAll = append(ressGetAll, model.ResponseGetAll{
 			ShortURL:    shortURL,
 			OriginalURL: originalURL,
 		})
@@ -112,7 +86,7 @@ func (s *URLService) GetAll(ctx context.Context) ([]ResponseGetAll, error) {
 	return ressGetAll, nil
 }
 
-func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []RequestShortenBatch) ([]ResponseShortenBatch, error) {
+func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.RequestShortenBatch) (*model.BatchResult, error) {
 
 	if len(reqsBatch) == 0 {
 		return nil, ErrEmptyRequest
@@ -135,13 +109,13 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []RequestShorte
 		return nil, ErrRepository
 	}
 
-	batch := []repository.BatchItem{}
-	ressBatch := make([]ResponseShortenBatch, 0, len(reqsBatch))
+	batch := []model.BatchItem{}
+	ressBatch := make([]model.ResponseShortenBatch, 0, len(reqsBatch))
 	generatedIDs := make(map[string]bool)
 
 	for _, item := range reqsBatch {
 		if foundID, ok := foundIDs[item.OriginalURL]; ok {
-			ressBatch = append(ressBatch, ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: s.baseURL + "/" + foundID})
+			ressBatch = append(ressBatch, model.ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: s.baseURL + "/" + foundID})
 		} else {
 			generatedID := generateShortID(8)
 			attempts := 0
@@ -152,39 +126,41 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []RequestShorte
 			if attempts >= 100 {
 				return nil, ErrFailedToGenerateID
 			}
-			batch = append(batch, repository.BatchItem{ShortURL: generatedID, OriginalURL: item.OriginalURL})
-			ressBatch = append(ressBatch, ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: s.baseURL + "/" + generatedID})
+			generatedIDs[generatedID] = true
+			batch = append(batch, model.BatchItem{ShortURL: generatedID, OriginalURL: item.OriginalURL})
+			ressBatch = append(ressBatch, model.ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: s.baseURL + "/" + generatedID})
 		}
 	}
 
-	err = s.repo.SaveBatch(ctx, batch)
-	if err != nil {
-		switch {
-		case errors.Is(err, repository.ErrIDAlreadyExists):
-			return nil, ErrIDAlreadyExists
-		case errors.Is(err, repository.ErrURLAlreadyExists):
-			return nil, ErrURLAlreadyExists
-		default:
-			return nil, ErrRepository
+	createdNew := len(batch) > 0
+
+	if createdNew {
+		err = s.repo.SaveBatch(ctx, batch)
+		if err != nil {
+			switch {
+			case errors.Is(err, repository.ErrIDAlreadyExists):
+				return nil, ErrIDAlreadyExists
+			default:
+				return nil, ErrRepository
+			}
 		}
 	}
 
-	return ressBatch, nil
+	return &model.BatchResult{
+		Responses:  ressBatch,
+		CreatedNew: createdNew,
+	}, nil
 }
 
-func (s *URLService) Shorten(ctx context.Context, reqs RequestShorten) (ResponseShorten, error) {
+func (s *URLService) Shorten(ctx context.Context, reqs model.RequestShorten) (model.ResponseShorten, error) {
 
 	if reqs.URL == "" {
-		return ResponseShorten{}, ErrInvalidURL
+		return model.ResponseShorten{}, ErrInvalidURL
 	}
 
 	id, err := processURL(ctx, s.repo, reqs.URL)
 
-	if err != nil && id == "" {
-		return ResponseShorten{}, err
-	}
-
-	ress := ResponseShorten{
+	ress := model.ResponseShorten{
 		Result: s.baseURL + "/" + id,
 	}
 
@@ -205,11 +181,12 @@ func (s *URLService) BaseGet(ctx context.Context, shortURL string) (string, erro
 }
 
 func (s *URLService) BasePost(ctx context.Context, originalURL string) (string, error) {
-	id, err := processURL(ctx, s.repo, originalURL)
 
-	if err != nil && id == "" {
-		return "", err
+	if originalURL == "" {
+		return "", ErrInvalidURL
 	}
+
+	id, err := processURL(ctx, s.repo, originalURL)
 
 	return s.baseURL + "/" + id, err
 }

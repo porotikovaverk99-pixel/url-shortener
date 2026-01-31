@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 )
 
 type MemoryStorage struct {
@@ -42,7 +44,7 @@ func (ms *MemoryStorage) Save(ctx context.Context, short string, original string
 	return ms.WriteToFile(dataCopy)
 }
 
-func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []BatchItem) error {
+func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []model.BatchItem) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	for _, item := range batch {
