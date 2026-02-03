@@ -59,7 +59,7 @@ func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []model.BatchItem,
 	return ms.WriteToFile(dataCopy)
 }
 
-func (ms *MemoryStorage) Get(ctx context.Context, short string, userID string) (string, error) {
+func (ms *MemoryStorage) Get(ctx context.Context, short string) (string, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if original, ok := ms.data[short]; ok {

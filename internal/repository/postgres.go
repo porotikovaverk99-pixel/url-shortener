@@ -163,10 +163,10 @@ func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []model.BatchIte
 	return tx.Commit(ctx)
 }
 
-func (ps *PostgresStorage) Get(ctx context.Context, shortID string, userID string) (string, error) {
+func (ps *PostgresStorage) Get(ctx context.Context, shortID string) (string, error) {
 	var originalURL string
 	err := ps.pool.QueryRow(ctx,
-		"SELECT original_url FROM urls WHERE short_url = $1 AND user_id = $2", shortID, userID).Scan(&originalURL)
+		"SELECT original_url FROM urls WHERE short_url = $1", shortID).Scan(&originalURL)
 	if err != nil {
 		return "", ErrURLNotFound
 	}

@@ -33,13 +33,7 @@ func (h *URLHandler) BaseHandler() http.Handler {
 				return
 			}
 
-			userID, ok := auth.GetUserID(r.Context())
-			if !ok {
-				w.WriteHeader(http.StatusUnauthorized)
-				return
-			}
-
-			result, err := h.service.BaseGet(r.Context(), id, userID)
+			result, err := h.service.BaseGet(r.Context(), id)
 			if err != nil {
 				switch err {
 				case service.ErrURLNotFound:

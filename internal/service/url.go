@@ -167,8 +167,8 @@ func (s *URLService) Shorten(ctx context.Context, reqs model.RequestShorten, use
 	return ress, err
 }
 
-func (s *URLService) BaseGet(ctx context.Context, shortURL string, userID string) (string, error) {
-	original, err := s.repo.Get(ctx, shortURL, userID)
+func (s *URLService) BaseGet(ctx context.Context, shortURL string) (string, error) {
+	original, err := s.repo.Get(ctx, shortURL)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrURLNotFound) {
