@@ -3,12 +3,13 @@ package main
 import (
 	"log"
 
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/auth"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/config"
 	packgzip "github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
 	hdlr "github.com/porotikovaverk99-pixel/url-shortener/internal/handler"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/logger"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/repository"
-	"github.com/porotikovaverk99-pixel/url-shortener/internal/server"
+	svr "github.com/porotikovaverk99-pixel/url-shortener/internal/server"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
 	"go.uber.org/zap"
 )
@@ -23,38 +24,45 @@ func main() {
 	defer logger.Log.Sync()
 
 	var URLRepository repository.URLRepository
+	var UserRepository repository.UserRepository
 	var err error
 
 	if cfg.DatabaseDSN != "" {
-		URLRepository, err = repository.NewPostgresStorage(cfg.DatabaseDSN)
+		storage, err := repository.NewPostgresStorage(cfg.DatabaseDSN)
 		if err != nil {
 			logger.Log.Fatal("Error occurs while initializing PostgreSQL storage", zap.Error(err))
 		}
 		logger.Log.Info("Using PostgreSQL storage")
+		URLRepository = storage
+		UserRepository = storage
 	} else {
-		URLRepository, err = repository.NewMemoryStorage(cfg.FileStoragePath)
+		storage, err := repository.NewMemoryStorage(cfg.FileStoragePath)
 		if err != nil {
 			logger.Log.Fatal("Error occurs while initializing file storage", zap.Error(err))
 		}
 		logger.Log.Info("Using file storage", zap.String("path", cfg.FileStoragePath))
+		URLRepository = storage
+		UserRepository = storage
 	}
 
-	server := server.New(cfg.RunAddr)
 	URLService := service.NewURLService(URLRepository, cfg.BaseURL)
 	URLHandler := hdlr.NewURLHandler(URLService)
 
-	baseHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.BaseHandler()))
-	shortenHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.ShortenHandler()))
-	pingHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.PingHandler()))
-	batchHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.ShortenBatchHandler()))
-	getAllHandler := logger.RequestLogger(packgzip.GzipMiddleware(URLHandler.GetAllHandler()))
+	server := svr.New(cfg.RunAddr)
 
-	server.HandleFunc("/", baseHandler.ServeHTTP)
-	server.HandleFunc("/{id}", baseHandler.ServeHTTP)
-	server.HandleFunc("/api/shorten", shortenHandler.ServeHTTP)
-	server.HandleFunc("/ping", pingHandler.ServeHTTP)
-	server.HandleFunc("/api/shorten/batch", batchHandler.ServeHTTP)
-	server.HandleFunc("/api/user/urls", getAllHandler.ServeHTTP)
+	router := server.Router()
+
+	secretKey := cfg.SecretKey
+	router.Use(auth.Auth(secretKey, UserRepository))
+	router.Use(logger.RequestLogger)
+	router.Use(packgzip.GzipMiddleware)
+
+	server.HandleFunc("/", URLHandler.BaseHandler().ServeHTTP)
+	server.HandleFunc("/{id}", URLHandler.BaseHandler().ServeHTTP)
+	server.HandleFunc("/api/shorten", URLHandler.ShortenHandler().ServeHTTP)
+	server.HandleFunc("/ping", URLHandler.PingHandler().ServeHTTP)
+	server.HandleFunc("/api/shorten/batch", URLHandler.ShortenBatchHandler().ServeHTTP)
+	server.HandleFunc("/api/user/urls", URLHandler.GetAllHandler().ServeHTTP)
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
 

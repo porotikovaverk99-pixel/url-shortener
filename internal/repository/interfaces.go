@@ -15,11 +15,15 @@ var (
 )
 
 type URLRepository interface {
-	Save(ctx context.Context, short string, original string) error
-	SaveBatch(ctx context.Context, batch []model.BatchItem) error
-	Get(ctx context.Context, short string) (string, error)
-	FindIDByURL(ctx context.Context, url string) (string, error)
-	FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error)
+	Save(ctx context.Context, short string, original string, userID string) error
+	SaveBatch(ctx context.Context, batch []model.BatchItem, userID string) error
+	Get(ctx context.Context, short string, userID string) (string, error)
+	FindIDByURL(ctx context.Context, url string, userID string) (string, error)
+	FindIDByURLs(ctx context.Context, urls []string, userID string) (map[string]string, error)
 	Ping(ctx context.Context) error
-	GetAll(ctx context.Context) (map[string]string, error)
+	GetUserURLs(ctx context.Context, userID string) (map[string]string, error)
+}
+
+type UserRepository interface {
+	CreateUser(ctx context.Context, userID string) error
 }

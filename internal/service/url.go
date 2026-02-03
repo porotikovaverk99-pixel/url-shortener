@@ -44,15 +44,15 @@ func generateShortID(l int) string {
 	return string(result)
 }
 
-func processURL(ctx context.Context, repo repository.URLRepository, url string) (string, error) {
+func processURL(ctx context.Context, repo repository.URLRepository, url string, userID string) (string, error) {
 
-	foundID, err := repo.FindIDByURL(ctx, url)
+	foundID, err := repo.FindIDByURL(ctx, url, userID)
 	if err == nil {
 		return foundID, ErrURLAlreadyExists
 	}
 
 	id := generateShortID(8)
-	err = repo.Save(ctx, id, url)
+	err = repo.Save(ctx, id, url, userID)
 
 	if err != nil {
 		switch {
@@ -71,8 +71,8 @@ func (s *URLService) Ping(ctx context.Context) error {
 	return s.repo.Ping(ctx)
 }
 
-func (s *URLService) GetAll(ctx context.Context) ([]model.ResponseGetAll, error) {
-	result, err := s.repo.GetAll(ctx)
+func (s *URLService) GetAll(ctx context.Context, userID string) ([]model.ResponseGetAll, error) {
+	result, err := s.repo.GetAll(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (s *URLService) GetAll(ctx context.Context) ([]model.ResponseGetAll, error)
 	return ressGetAll, nil
 }
 
-func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.RequestShortenBatch) (*model.BatchResult, error) {
+func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.RequestShortenBatch, userID string) (*model.BatchResult, error) {
 
 	if len(reqsBatch) == 0 {
 		return nil, ErrEmptyRequest
@@ -104,7 +104,7 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.Request
 		urls = append(urls, item.OriginalURL)
 	}
 
-	foundIDs, err := s.repo.FindIDByURLs(ctx, urls)
+	foundIDs, err := s.repo.FindIDByURLs(ctx, urls, userID)
 	if err != nil {
 		return nil, ErrRepository
 	}
@@ -135,7 +135,7 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.Request
 	createdNew := len(batch) > 0
 
 	if createdNew {
-		err = s.repo.SaveBatch(ctx, batch)
+		err = s.repo.SaveBatch(ctx, batch, userID)
 		if err != nil {
 			switch {
 			case errors.Is(err, repository.ErrIDAlreadyExists):
@@ -152,13 +152,13 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.Request
 	}, nil
 }
 
-func (s *URLService) Shorten(ctx context.Context, reqs model.RequestShorten) (model.ResponseShorten, error) {
+func (s *URLService) Shorten(ctx context.Context, reqs model.RequestShorten, userID string) (model.ResponseShorten, error) {
 
 	if reqs.URL == "" {
 		return model.ResponseShorten{}, ErrInvalidURL
 	}
 
-	id, err := processURL(ctx, s.repo, reqs.URL)
+	id, err := processURL(ctx, s.repo, reqs.URL, userID)
 
 	ress := model.ResponseShorten{
 		Result: s.baseURL + "/" + id,
@@ -167,8 +167,8 @@ func (s *URLService) Shorten(ctx context.Context, reqs model.RequestShorten) (mo
 	return ress, err
 }
 
-func (s *URLService) BaseGet(ctx context.Context, shortURL string) (string, error) {
-	original, err := s.repo.Get(ctx, shortURL)
+func (s *URLService) BaseGet(ctx context.Context, shortURL string, userID string) (string, error) {
+	original, err := s.repo.Get(ctx, shortURL, userID)
 
 	if err != nil {
 		if errors.Is(err, repository.ErrURLNotFound) {
@@ -180,13 +180,13 @@ func (s *URLService) BaseGet(ctx context.Context, shortURL string) (string, erro
 	return original, nil
 }
 
-func (s *URLService) BasePost(ctx context.Context, originalURL string) (string, error) {
+func (s *URLService) BasePost(ctx context.Context, originalURL string, userID string) (string, error) {
 
 	if originalURL == "" {
 		return "", ErrInvalidURL
 	}
 
-	id, err := processURL(ctx, s.repo, originalURL)
+	id, err := processURL(ctx, s.repo, originalURL, userID)
 
 	return s.baseURL + "/" + id, err
 }
