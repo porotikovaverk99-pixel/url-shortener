@@ -19,6 +19,14 @@ func New(addr string) *Server {
 	}
 }
 
+func (s *Server) Router() *chi.Mux {
+	return s.router
+}
+
+func (s *Server) Use(middleware func(http.Handler) http.Handler) {
+	s.router.Use(middleware)
+}
+
 func (s *Server) HandleFunc(pattern string, handler http.HandlerFunc) {
 	s.router.HandleFunc(pattern, handler)
 }

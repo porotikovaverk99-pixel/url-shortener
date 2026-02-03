@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/auth"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
 )
@@ -31,6 +32,7 @@ func (h *URLHandler) BaseHandler() http.Handler {
 				jsonError(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
 			}
+
 			result, err := h.service.BaseGet(r.Context(), id)
 			if err != nil {
 				switch err {
@@ -59,7 +61,13 @@ func (h *URLHandler) BaseHandler() http.Handler {
 				return
 			}
 
-			result, err := h.service.BasePost(r.Context(), originalURL)
+			userID, ok := auth.GetUserID(r.Context())
+			if !ok {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
+			result, err := h.service.BasePost(r.Context(), originalURL, userID)
 
 			if err != nil {
 				switch err {
@@ -117,7 +125,13 @@ func (h *URLHandler) ShortenHandler() http.Handler {
 			return
 		}
 
-		result, err := h.service.Shorten(r.Context(), reqs)
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		result, err := h.service.Shorten(r.Context(), reqs, userID)
 
 		if err != nil {
 			switch err {
@@ -174,7 +188,13 @@ func (h *URLHandler) ShortenBatchHandler() http.Handler {
 			return
 		}
 
-		result, err := h.service.ShortenBatch(r.Context(), reqsBatch)
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		result, err := h.service.ShortenBatch(r.Context(), reqsBatch, userID)
 
 		if err != nil {
 			switch err {
@@ -232,7 +252,7 @@ func (h *URLHandler) PingHandler() http.Handler {
 	})
 }
 
-func (h *URLHandler) GetAllHandler() http.Handler {
+func (h *URLHandler) GetUserUrlsHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -241,9 +261,20 @@ func (h *URLHandler) GetAllHandler() http.Handler {
 			return
 		}
 
-		result, err := h.service.GetAll(r.Context())
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		result, err := h.service.GetUserUrls(r.Context(), userID)
 		if err != nil {
 			jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		if len(result) == 0 {
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 

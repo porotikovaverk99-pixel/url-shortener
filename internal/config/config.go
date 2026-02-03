@@ -12,6 +12,7 @@ type Config struct {
 	LogLevel        string
 	FileStoragePath string
 	DatabaseDSN     string
+	SecretKey       string
 }
 
 func ParseFlags() Config {
@@ -22,6 +23,7 @@ func ParseFlags() Config {
 	flag.StringVar(&cfg.LogLevel, "l", "Info", "log level")
 	flag.StringVar(&cfg.FileStoragePath, "f", "storage.json", "file storage path")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database dsn")
+	flag.StringVar(&cfg.SecretKey, "k", "", "secret key")
 	flag.Parse()
 
 	if sa := os.Getenv("SERVER_ADDRESS"); sa != "" {
@@ -42,6 +44,10 @@ func ParseFlags() Config {
 
 	if dd := os.Getenv("DATABASE_DSN"); dd != "" {
 		cfg.DatabaseDSN = dd
+	}
+
+	if sk := os.Getenv("SECRET_KEY"); sk != "" {
+		cfg.SecretKey = sk
 	}
 
 	if cfg.BaseURL == "" {

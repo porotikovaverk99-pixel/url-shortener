@@ -27,7 +27,7 @@ func NewMemoryStorage(filePath string) (*MemoryStorage, error) {
 	return ms, nil
 }
 
-func (ms *MemoryStorage) Save(ctx context.Context, short string, original string) error {
+func (ms *MemoryStorage) Save(ctx context.Context, short string, original string, userID string) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if _, ok := ms.data[short]; ok {
@@ -44,7 +44,7 @@ func (ms *MemoryStorage) Save(ctx context.Context, short string, original string
 	return ms.WriteToFile(dataCopy)
 }
 
-func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []model.BatchItem) error {
+func (ms *MemoryStorage) SaveBatch(ctx context.Context, batch []model.BatchItem, userID string) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	for _, item := range batch {
@@ -68,7 +68,7 @@ func (ms *MemoryStorage) Get(ctx context.Context, short string) (string, error) 
 	return "", ErrURLNotFound
 }
 
-func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, error) {
+func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string, userID string) (string, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	for k, v := range ms.data {
@@ -79,7 +79,7 @@ func (ms *MemoryStorage) FindIDByURL(ctx context.Context, url string) (string, e
 	return "", ErrIDNotFound
 }
 
-func (ms *MemoryStorage) FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error) {
+func (ms *MemoryStorage) FindIDByURLs(ctx context.Context, urls []string, userID string) (map[string]string, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 
@@ -166,8 +166,12 @@ func (ms *MemoryStorage) WriteToFile(data map[string]string) error {
 
 }
 
-func (ms *MemoryStorage) GetAll(ctx context.Context) (map[string]string, error) {
+func (ms *MemoryStorage) GetUserURLs(ctx context.Context, userID string) (map[string]string, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.data, nil
+}
+
+func (ms *MemoryStorage) CreateUser(ctx context.Context, userID string) error {
+	return nil
 }

@@ -18,7 +18,7 @@ type ResponseShortenBatch struct {
 	ShortURL      string `json:"short_url"`
 }
 
-type ResponseGetAll struct {
+type ResponseGetUserUrls struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 }

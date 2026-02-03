@@ -111,11 +111,11 @@ func runMigrations(dsn string) error {
 	return nil
 }
 
-func (ps *PostgresStorage) Save(ctx context.Context, shortID, originalURL string) error {
+func (ps *PostgresStorage) Save(ctx context.Context, shortID, originalURL string, userID string) error {
 	resTag, err := ps.pool.Exec(ctx,
-		`INSERT INTO urls (short_url, original_url) 
-         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-		shortID, originalURL)
+		`INSERT INTO urls (short_url, original_url, user_id) 
+         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+		shortID, originalURL, userID)
 
 	if err != nil {
 		return fmt.Errorf("failed to save URL: %w", err)
@@ -128,7 +128,7 @@ func (ps *PostgresStorage) Save(ctx context.Context, shortID, originalURL string
 	return nil
 }
 
-func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []model.BatchItem) error {
+func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []model.BatchItem, userID string) error {
 
 	conn, err := ps.pool.Acquire(ctx)
 	if err != nil {
@@ -146,9 +146,9 @@ func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []model.BatchIte
 
 	for _, item := range batch {
 		resTag, err := tx.Exec(ctx,
-			`INSERT INTO urls (short_url, original_url) 
-         	VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-			item.ShortURL, item.OriginalURL)
+			`INSERT INTO urls (short_url, original_url, user_id) 
+         	VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+			item.ShortURL, item.OriginalURL, userID)
 
 		if err != nil {
 			return fmt.Errorf("failed to save URL: %w", err)
@@ -173,23 +173,23 @@ func (ps *PostgresStorage) Get(ctx context.Context, shortID string) (string, err
 	return originalURL, nil
 }
 
-func (ps *PostgresStorage) FindIDByURL(ctx context.Context, url string) (string, error) {
+func (ps *PostgresStorage) FindIDByURL(ctx context.Context, url string, userID string) (string, error) {
 	var shortURL string
 	err := ps.pool.QueryRow(ctx,
-		"SELECT short_url FROM urls WHERE original_url = $1", url).Scan(&shortURL)
+		"SELECT short_url FROM urls WHERE original_url = $1 AND user_id = $2", url, userID).Scan(&shortURL)
 	if err != nil {
 		return "", ErrIDNotFound
 	}
 	return shortURL, nil
 }
 
-func (ps *PostgresStorage) FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error) {
+func (ps *PostgresStorage) FindIDByURLs(ctx context.Context, urls []string, userID string) (map[string]string, error) {
 
 	if len(urls) == 0 {
 		return map[string]string{}, nil
 	}
 
-	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls WHERE original_url = ANY($1)", urls)
+	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls WHERE original_url = ANY($1) AND user_id = $2", urls, userID)
 
 	if err != nil {
 		return nil, err
@@ -216,9 +216,9 @@ func (ps *PostgresStorage) Ping(ctx context.Context) error {
 	return ps.pool.Ping(ctx)
 }
 
-func (ps *PostgresStorage) GetAll(ctx context.Context) (map[string]string, error) {
+func (ps *PostgresStorage) GetUserURLs(ctx context.Context, userID string) (map[string]string, error) {
 
-	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls")
+	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls WHERE user_id = $1", userID)
 
 	if err != nil {
 		return nil, err
@@ -239,4 +239,11 @@ func (ps *PostgresStorage) GetAll(ctx context.Context) (map[string]string, error
 	}
 
 	return result, nil
+}
+
+func (ps *PostgresStorage) CreateUser(ctx context.Context, userID string) error {
+	_, err := ps.pool.Exec(ctx,
+		`INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING`,
+		userID)
+	return err
 }

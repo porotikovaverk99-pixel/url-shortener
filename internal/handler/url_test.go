@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	jwt "github.com/golang-jwt/jwt/v5"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/auth"
 	packgzip "github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/repository"
@@ -21,17 +23,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTest() (*URLHandler, repository.URLRepository, func(), error) {
+const testSecretKey = "test-secret-key-for-tests"
+
+type contextKey string
+
+const userIDContextKey contextKey = "userID"
+
+func setupTest() (*URLHandler, repository.URLRepository, repository.UserRepository, func(), error) {
 	tmpfile, err := os.CreateTemp("", "test-*.json")
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	tmpfile.Close()
 
 	repo, err := repository.NewMemoryStorage(tmpfile.Name())
 	if err != nil {
 		os.Remove(tmpfile.Name())
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	urlService := service.NewURLService(repo, "http://localhost:8080")
@@ -41,7 +49,33 @@ func setupTest() (*URLHandler, repository.URLRepository, func(), error) {
 		os.Remove(tmpfile.Name())
 	}
 
-	return handler, repo, cleanup, nil
+	return handler, repo, repo, cleanup, nil
+}
+
+func generateTestToken(userID, secretKey string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": userID,
+	})
+	return token.SignedString([]byte(secretKey))
+}
+
+func newRequestWithUserID(method, url, body string) (*http.Request, error) {
+	var reqBody io.Reader
+	if body != "" {
+		reqBody = strings.NewReader(body)
+	}
+
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := generateTestToken("test-user-id", testSecretKey)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	return req, nil
 }
 
 func TestURLHandler_BaseHandler(t *testing.T) {
@@ -75,7 +109,8 @@ func TestURLHandler_BaseHandler(t *testing.T) {
 			method: http.MethodPost,
 			body:   "google.ru",
 			setup: func(repo repository.URLRepository) {
-				repo.Save(context.Background(), "abcdef", "google.ru")
+				ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
+				repo.Save(ctx, "abcdef", "google.ru", "test-user-id")
 			},
 			want: want{
 				statusCode:  http.StatusConflict,
@@ -97,7 +132,8 @@ func TestURLHandler_BaseHandler(t *testing.T) {
 			url:    "/abcdef",
 			method: http.MethodGet,
 			setup: func(repo repository.URLRepository) {
-				repo.Save(context.Background(), "abcdef", "yandex.ru")
+				ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
+				repo.Save(ctx, "abcdef", "yandex.ru", "test-user-id")
 			},
 			want: want{
 				statusCode: http.StatusTemporaryRedirect,
@@ -126,7 +162,7 @@ func TestURLHandler_BaseHandler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			handler, repo, cleanup, err := setupTest()
+			handler, repo, userRepo, cleanup, err := setupTest()
 			require.NoError(t, err)
 			defer cleanup()
 
@@ -135,6 +171,7 @@ func TestURLHandler_BaseHandler(t *testing.T) {
 			}
 
 			r := chi.NewRouter()
+			r.Use(auth.Auth(testSecretKey, userRepo))
 			r.Method(http.MethodPost, "/", handler.BaseHandler())
 			r.Method(http.MethodGet, "/{id}", handler.BaseHandler())
 			r.Method(http.MethodPut, "/", handler.BaseHandler())
@@ -142,12 +179,7 @@ func TestURLHandler_BaseHandler(t *testing.T) {
 			ts := httptest.NewServer(r)
 			defer ts.Close()
 
-			var reqBody io.Reader
-			if test.body != "" {
-				reqBody = strings.NewReader(test.body)
-			}
-
-			req, err := http.NewRequest(test.method, ts.URL+test.url, reqBody)
+			req, err := newRequestWithUserID(test.method, ts.URL+test.url, test.body)
 			require.NoError(t, err)
 
 			client := &http.Client{
@@ -206,7 +238,8 @@ func TestURLHandler_ShortenHandler(t *testing.T) {
 				"Content-Type": "application/json",
 			},
 			setup: func(repo repository.URLRepository) {
-				repo.Save(context.Background(), "abcdef", "google.ru")
+				ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
+				repo.Save(ctx, "abcdef", "google.ru", "test-user-id")
 			},
 			want: want{
 				statusCode:  http.StatusConflict,
@@ -238,7 +271,7 @@ func TestURLHandler_ShortenHandler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			handler, repo, cleanup, err := setupTest()
+			handler, repo, userRepo, cleanup, err := setupTest()
 			require.NoError(t, err)
 			defer cleanup()
 
@@ -247,13 +280,14 @@ func TestURLHandler_ShortenHandler(t *testing.T) {
 			}
 
 			r := chi.NewRouter()
+			r.Use(auth.Auth(testSecretKey, userRepo))
 			r.Method(http.MethodPost, "/api/shorten", handler.ShortenHandler())
 			r.Method(http.MethodGet, "/api/shorten", handler.ShortenHandler())
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()
 
-			req, err := http.NewRequest(test.method, ts.URL+"/api/shorten", strings.NewReader(test.body))
+			req, err := newRequestWithUserID(test.method, ts.URL+"/api/shorten", test.body)
 			require.NoError(t, err)
 
 			for k, v := range test.headers {
@@ -290,12 +324,14 @@ func TestGzipCompression(t *testing.T) {
 	repo, err := repository.NewMemoryStorage(tmpfile.Name())
 	require.NoError(t, err)
 
-	repo.Save(context.Background(), "abcdef", "google.ru")
+	ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
+	repo.Save(ctx, "abcdef", "google.ru", "test-user-id")
 
 	urlService := service.NewURLService(repo, "http://localhost:8080")
 	handler := NewURLHandler(urlService)
 
 	r := chi.NewRouter()
+	r.Use(auth.Auth(testSecretKey, repo))
 	handlerMiddleware := packgzip.GzipMiddleware(handler.ShortenHandler())
 	r.Post("/api/shorten", handlerMiddleware.ServeHTTP)
 
@@ -313,8 +349,9 @@ func TestGzipCompression(t *testing.T) {
 		err = zb.Close()
 		require.NoError(t, err)
 
-		req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/shorten", buf)
+		req, err := newRequestWithUserID(http.MethodPost, ts.URL+"/api/shorten", "")
 		require.NoError(t, err)
+		req.Body = io.NopCloser(buf)
 
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Content-Encoding", "gzip")
@@ -338,8 +375,7 @@ func TestGzipCompression(t *testing.T) {
 	})
 
 	t.Run("accepts_gzip", func(t *testing.T) {
-		buf := bytes.NewBufferString(requestBody)
-		req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/shorten", buf)
+		req, err := newRequestWithUserID(http.MethodPost, ts.URL+"/api/shorten", requestBody)
 		require.NoError(t, err)
 
 		req.Header.Set("Content-Type", "application/json")
@@ -377,8 +413,8 @@ func TestURLHandler_ShortenBatchHandler(t *testing.T) {
 			name:   "test POST batch success",
 			method: http.MethodPost,
 			body: `[
-				{"correlation_id": "1", "original_url": "https://google.com"},
-				{"correlation_id": "2", "original_url": "https://yandex.ru"}
+				{"correlation_id": "1", "original_url": "https://google.com  "},
+				{"correlation_id": "2", "original_url": "https://yandex.ru  "}
 			]`,
 			want: http.StatusCreated,
 		},
@@ -398,18 +434,19 @@ func TestURLHandler_ShortenBatchHandler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			handler, _, cleanup, err := setupTest()
+			handler, _, userRepo, cleanup, err := setupTest()
 			require.NoError(t, err)
 			defer cleanup()
 
 			r := chi.NewRouter()
+			r.Use(auth.Auth(testSecretKey, userRepo))
 			r.Method(http.MethodPost, "/api/shorten/batch", handler.ShortenBatchHandler())
 			r.Method(http.MethodGet, "/api/shorten/batch", handler.ShortenBatchHandler())
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()
 
-			req, err := http.NewRequest(test.method, ts.URL+"/api/shorten/batch", strings.NewReader(test.body))
+			req, err := newRequestWithUserID(test.method, ts.URL+"/api/shorten/batch", test.body)
 			require.NoError(t, err)
 
 			if test.method == http.MethodPost {
@@ -453,18 +490,19 @@ func TestURLHandler_PingHandler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			handler, _, cleanup, err := setupTest()
+			handler, _, userRepo, cleanup, err := setupTest()
 			require.NoError(t, err)
 			defer cleanup()
 
 			r := chi.NewRouter()
+			r.Use(auth.Auth(testSecretKey, userRepo))
 			r.Method(http.MethodGet, "/ping", handler.PingHandler())
 			r.Method(http.MethodPost, "/ping", handler.PingHandler())
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()
 
-			req, err := http.NewRequest(test.method, ts.URL+"/ping", nil)
+			req, err := newRequestWithUserID(test.method, ts.URL+"/ping", "")
 			require.NoError(t, err)
 
 			client := &http.Client{}
@@ -488,15 +526,16 @@ func TestURLHandler_GetAllHandler(t *testing.T) {
 			name:   "test GET all success",
 			method: http.MethodGet,
 			setup: func(repo repository.URLRepository) {
-				repo.Save(context.Background(), "abc123", "https://google.com")
-				repo.Save(context.Background(), "def456", "https://yandex.ru")
+				ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
+				repo.Save(ctx, "abc123", "https://google.com  ", "test-user-id")
+				repo.Save(ctx, "def456", "https://yandex.ru  ", "test-user-id")
 			},
 			want: http.StatusOK,
 		},
 		{
 			name:   "test GET all empty",
 			method: http.MethodGet,
-			want:   http.StatusOK,
+			want:   http.StatusNoContent,
 		},
 		{
 			name:   "test POST method not allowed",
@@ -507,7 +546,7 @@ func TestURLHandler_GetAllHandler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			handler, repo, cleanup, err := setupTest()
+			handler, repo, userRepo, cleanup, err := setupTest()
 			require.NoError(t, err)
 			defer cleanup()
 
@@ -516,13 +555,14 @@ func TestURLHandler_GetAllHandler(t *testing.T) {
 			}
 
 			r := chi.NewRouter()
-			r.Method(http.MethodGet, "/api/user/urls", handler.GetAllHandler())
-			r.Method(http.MethodPost, "/api/user/urls", handler.GetAllHandler())
+			r.Use(auth.Auth(testSecretKey, userRepo))
+			r.Method(http.MethodGet, "/api/user/urls", handler.GetUserUrlsHandler())
+			r.Method(http.MethodPost, "/api/user/urls", handler.GetUserUrlsHandler())
 
 			ts := httptest.NewServer(r)
 			defer ts.Close()
 
-			req, err := http.NewRequest(test.method, ts.URL+"/api/user/urls", nil)
+			req, err := newRequestWithUserID(test.method, ts.URL+"/api/user/urls", "")
 			require.NoError(t, err)
 
 			client := &http.Client{}
@@ -533,7 +573,7 @@ func TestURLHandler_GetAllHandler(t *testing.T) {
 			assert.Equal(t, test.want, res.StatusCode)
 
 			if res.StatusCode == http.StatusOK {
-				var responses []model.ResponseGetAll
+				var responses []model.ResponseGetUserUrls
 				err := json.NewDecoder(res.Body).Decode(&responses)
 				require.NoError(t, err)
 
