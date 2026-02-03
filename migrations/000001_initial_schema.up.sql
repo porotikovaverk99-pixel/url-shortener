@@ -1,18 +1,12 @@
 -- migrations/000001_initial_schema.up.sql
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Таблица пользователей
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Таблица URL
+-- Таблица сокращённых URL
 CREATE TABLE urls (
     id BIGSERIAL PRIMARY KEY,
     short_url VARCHAR(50) UNIQUE NOT NULL,
     original_url TEXT NOT NULL,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, original_url)  -- уникальность в рамках одного пользователя
 );

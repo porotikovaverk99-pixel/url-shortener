@@ -34,11 +34,6 @@ func Auth(secretKey string, userRepo repository.UserRepository) func(http.Handle
 			if signedCookie == "" || !verifyCookie(signedCookie, key) {
 				userID = uuid.New().String()
 
-				if err := userRepo.CreateUser(r.Context(), userID); err != nil {
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
-					return
-				}
-
 				signedValue := signUserID(userID, key)
 
 				http.SetCookie(w, &http.Cookie{
