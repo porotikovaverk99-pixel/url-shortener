@@ -258,7 +258,7 @@ func (h *URLHandler) PingHandler() http.Handler {
 	})
 }
 
-func (h *URLHandler) GetAllHandler() http.Handler {
+func (h *URLHandler) GetUserUrlsHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -273,7 +273,7 @@ func (h *URLHandler) GetAllHandler() http.Handler {
 			return
 		}
 
-		result, err := h.service.GetAll(r.Context(), userID)
+		result, err := h.service.GetUserUrls(r.Context(), userID)
 		if err != nil {
 			jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return

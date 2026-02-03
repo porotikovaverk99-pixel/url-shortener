@@ -71,15 +71,15 @@ func (s *URLService) Ping(ctx context.Context) error {
 	return s.repo.Ping(ctx)
 }
 
-func (s *URLService) GetAll(ctx context.Context, userID string) ([]model.ResponseGetAll, error) {
-	result, err := s.repo.GetAll(ctx, userID)
+func (s *URLService) GetUserUrls(ctx context.Context, userID string) ([]model.ResponseGetUserUrls, error) {
+	result, err := s.repo.GetUserURLs(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	ressGetAll := make([]model.ResponseGetAll, 0, len(result))
+	ressGetAll := make([]model.ResponseGetUserUrls, 0, len(result))
 	for originalURL, shortURL := range result {
-		ressGetAll = append(ressGetAll, model.ResponseGetAll{
-			ShortURL:    shortURL,
+		ressGetAll = append(ressGetAll, model.ResponseGetUserUrls{
+			ShortURL:    s.baseURL + "/" + shortURL,
 			OriginalURL: originalURL,
 		})
 	}

@@ -23,7 +23,7 @@ func ParseFlags() Config {
 	flag.StringVar(&cfg.LogLevel, "l", "Info", "log level")
 	flag.StringVar(&cfg.FileStoragePath, "f", "storage.json", "file storage path")
 	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database dsn")
-	flag.StringVar(&cfg.secretKey, "k", "", "secret key")
+	flag.StringVar(&cfg.SecretKey, "k", "", "secret key")
 	flag.Parse()
 
 	if sa := os.Getenv("SERVER_ADDRESS"); sa != "" {
@@ -47,7 +47,7 @@ func ParseFlags() Config {
 	}
 
 	if sk := os.Getenv("SECRET_KEY"); sk != "" {
-		cfg.secretKey = sk
+		cfg.SecretKey = sk
 	}
 
 	if cfg.BaseURL == "" {

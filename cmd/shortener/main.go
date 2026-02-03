@@ -62,7 +62,7 @@ func main() {
 	server.HandleFunc("/api/shorten", URLHandler.ShortenHandler().ServeHTTP)
 	server.HandleFunc("/ping", URLHandler.PingHandler().ServeHTTP)
 	server.HandleFunc("/api/shorten/batch", URLHandler.ShortenBatchHandler().ServeHTTP)
-	server.HandleFunc("/api/user/urls", URLHandler.GetAllHandler().ServeHTTP)
+	server.HandleFunc("/api/user/urls", URLHandler.GetUserUrlsHandler().ServeHTTP)
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
 

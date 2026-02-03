@@ -231,7 +231,7 @@ func (ps *PostgresStorage) GetUserURLs(ctx context.Context, userID string) (map[
 		if err := rows.Scan(&shortURL, &originalURL); err != nil {
 			return nil, err
 		}
-		result[shortURL] = originalURL
+		result[originalURL] = shortURL
 	}
 
 	if err := rows.Err(); err != nil {
