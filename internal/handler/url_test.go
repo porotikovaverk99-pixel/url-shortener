@@ -25,6 +25,10 @@ import (
 
 const testSecretKey = "test-secret-key-for-tests"
 
+type contextKey string
+
+const userIDContextKey contextKey = "userID"
+
 func setupTest() (*URLHandler, repository.URLRepository, repository.UserRepository, func(), error) {
 	tmpfile, err := os.CreateTemp("", "test-*.json")
 	if err != nil {
@@ -105,7 +109,7 @@ func TestURLHandler_BaseHandler(t *testing.T) {
 			method: http.MethodPost,
 			body:   "google.ru",
 			setup: func(repo repository.URLRepository) {
-				ctx := context.WithValue(context.Background(), "userID", "test-user-id")
+				ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
 				repo.Save(ctx, "abcdef", "google.ru", "test-user-id")
 			},
 			want: want{
@@ -128,7 +132,7 @@ func TestURLHandler_BaseHandler(t *testing.T) {
 			url:    "/abcdef",
 			method: http.MethodGet,
 			setup: func(repo repository.URLRepository) {
-				ctx := context.WithValue(context.Background(), "userID", "test-user-id")
+				ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
 				repo.Save(ctx, "abcdef", "yandex.ru", "test-user-id")
 			},
 			want: want{
@@ -234,7 +238,7 @@ func TestURLHandler_ShortenHandler(t *testing.T) {
 				"Content-Type": "application/json",
 			},
 			setup: func(repo repository.URLRepository) {
-				ctx := context.WithValue(context.Background(), "userID", "test-user-id")
+				ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
 				repo.Save(ctx, "abcdef", "google.ru", "test-user-id")
 			},
 			want: want{
@@ -320,7 +324,7 @@ func TestGzipCompression(t *testing.T) {
 	repo, err := repository.NewMemoryStorage(tmpfile.Name())
 	require.NoError(t, err)
 
-	ctx := context.WithValue(context.Background(), "userID", "test-user-id")
+	ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
 	repo.Save(ctx, "abcdef", "google.ru", "test-user-id")
 
 	urlService := service.NewURLService(repo, "http://localhost:8080")
@@ -522,7 +526,7 @@ func TestURLHandler_GetAllHandler(t *testing.T) {
 			name:   "test GET all success",
 			method: http.MethodGet,
 			setup: func(repo repository.URLRepository) {
-				ctx := context.WithValue(context.Background(), "userID", "test-user-id")
+				ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
 				repo.Save(ctx, "abc123", "https://google.com  ", "test-user-id")
 				repo.Save(ctx, "def456", "https://yandex.ru  ", "test-user-id")
 			},
