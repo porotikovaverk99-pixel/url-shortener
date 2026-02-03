@@ -1,4 +1,4 @@
--- migrations/000003_create_users_table.up.sql
+-- migrations/000001_create_users_table.up.sql
 -- Создание таблицы пользователей
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,4 +1,4 @@
--- migrations/000001_url_shortener_table.up.sql
+-- migrations/000002_url_shortener_table.up.sql
 -- Создание таблицы сокращенных URL
 CREATE TABLE urls (
     id SERIAL PRIMARY KEY,
