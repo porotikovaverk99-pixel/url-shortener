@@ -2,53 +2,35 @@ package config
 
 import (
 	"flag"
-	"os"
 	"strings"
+
+	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
-	RunAddr         string
-	BaseURL         string
-	LogLevel        string
-	FileStoragePath string
-	DatabaseDSN     string
-	SecretKey       string
+	RunAddr         string `env:"SERVER_ADDRESS" env-default:":8080" flag:"a" flag-desc:"address and port to run server"`
+	BaseURL         string `env:"BASE_URL" flag:"b" flag-desc:"base URL for shortened URLs"`
+	LogLevel        string `env:"LOG_LEVEL" env-default:"Info" flag:"l" flag-desc:"log level"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH" env-default:"storage.json" flag:"f" flag-desc:"file storage path"`
+	DatabaseDSN     string `env:"DATABASE_DSN" flag:"d" flag-desc:"database dsn"`
+	SecretKey       string `env:"SECRET_KEY" flag:"k" flag-desc:"secret key"`
 }
 
 func ParseFlags() Config {
 	var cfg Config
 
-	flag.StringVar(&cfg.RunAddr, "a", ":8080", "address and port to run server")
-	flag.StringVar(&cfg.BaseURL, "b", "", "base URL for shortened URLs")
-	flag.StringVar(&cfg.LogLevel, "l", "Info", "log level")
-	flag.StringVar(&cfg.FileStoragePath, "f", "storage.json", "file storage path")
-	flag.StringVar(&cfg.DatabaseDSN, "d", "", "database dsn")
-	flag.StringVar(&cfg.SecretKey, "k", "", "secret key")
+	err := cleanenv.ReadEnv(&cfg)
+	if err != nil {
+	}
+
+	flag.StringVar(&cfg.RunAddr, "a", cfg.RunAddr, "address and port to run server")
+	flag.StringVar(&cfg.BaseURL, "b", cfg.BaseURL, "base URL for shortened URLs")
+	flag.StringVar(&cfg.LogLevel, "l", cfg.LogLevel, "log level")
+	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "file storage path")
+	flag.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "database dsn")
+	flag.StringVar(&cfg.SecretKey, "k", cfg.SecretKey, "secret key")
+
 	flag.Parse()
-
-	if sa := os.Getenv("SERVER_ADDRESS"); sa != "" {
-		cfg.RunAddr = sa
-	}
-
-	if bu := os.Getenv("BASE_URL"); bu != "" {
-		cfg.BaseURL = bu
-	}
-
-	if l := os.Getenv("LOG_LEVEL"); l != "" {
-		cfg.LogLevel = l
-	}
-
-	if f := os.Getenv("FILE_STORAGE_PATH"); f != "" {
-		cfg.FileStoragePath = f
-	}
-
-	if dd := os.Getenv("DATABASE_DSN"); dd != "" {
-		cfg.DatabaseDSN = dd
-	}
-
-	if sk := os.Getenv("SECRET_KEY"); sk != "" {
-		cfg.SecretKey = sk
-	}
 
 	if cfg.BaseURL == "" {
 		host := "localhost"
