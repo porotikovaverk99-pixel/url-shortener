@@ -2,6 +2,9 @@ package main
 
 import (
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/auth"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/config"
@@ -24,28 +27,33 @@ func main() {
 	defer logger.Log.Sync()
 
 	var URLRepository repository.URLRepository
-	var UserRepository repository.UserRepository
 	var err error
 
 	if cfg.DatabaseDSN != "" {
-		storage, err := repository.NewPostgresStorage(cfg.DatabaseDSN)
+		URLRepository, err = repository.NewPostgresStorage(cfg.DatabaseDSN)
 		if err != nil {
 			logger.Log.Fatal("Error occurs while initializing PostgreSQL storage", zap.Error(err))
 		}
 		logger.Log.Info("Using PostgreSQL storage")
-		URLRepository = storage
-		UserRepository = storage
 	} else {
-		storage, err := repository.NewMemoryStorage(cfg.FileStoragePath)
+		URLRepository, err = repository.NewMemoryStorage(cfg.FileStoragePath)
 		if err != nil {
 			logger.Log.Fatal("Error occurs while initializing file storage", zap.Error(err))
 		}
 		logger.Log.Info("Using file storage", zap.String("path", cfg.FileStoragePath))
-		URLRepository = storage
-		UserRepository = storage
 	}
 
-	URLService := service.NewURLService(URLRepository, cfg.BaseURL)
+	URLService := service.NewURLService(URLRepository, cfg.BaseURL, 100, 5)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-stop
+		logger.Log.Info("Shutdown signal received")
+		URLService.Shutdown()
+		os.Exit(0)
+	}()
+
 	URLHandler := hdlr.NewURLHandler(URLService)
 
 	server := svr.New(cfg.RunAddr)
@@ -53,7 +61,7 @@ func main() {
 	router := server.Router()
 
 	secretKey := cfg.SecretKey
-	router.Use(auth.Auth(secretKey, UserRepository))
+	router.Use(auth.Auth(secretKey))
 	router.Use(logger.RequestLogger)
 	router.Use(packgzip.GzipMiddleware)
 
@@ -62,7 +70,7 @@ func main() {
 	server.HandleFunc("/api/shorten", URLHandler.ShortenHandler().ServeHTTP)
 	server.HandleFunc("/ping", URLHandler.PingHandler().ServeHTTP)
 	server.HandleFunc("/api/shorten/batch", URLHandler.ShortenBatchHandler().ServeHTTP)
-	server.HandleFunc("/api/user/urls", URLHandler.GetUserUrlsHandler().ServeHTTP)
+	server.HandleFunc("/api/user/urls", URLHandler.UserUrlsHandler().ServeHTTP)
 
 	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
 

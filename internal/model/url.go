@@ -32,3 +32,8 @@ type BatchItem struct {
 	ShortURL    string
 	OriginalURL string
 }
+
+type DeleteTask struct {
+	UserID    string
+	ShortURLs []string
+}

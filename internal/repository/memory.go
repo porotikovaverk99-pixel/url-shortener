@@ -175,3 +175,7 @@ func (ms *MemoryStorage) GetUserURLs(ctx context.Context, userID string) (map[st
 func (ms *MemoryStorage) CreateUser(ctx context.Context, userID string) error {
 	return nil
 }
+
+func (ms *MemoryStorage) MarkURLsAsDeleted(ctx context.Context, urls []string, userID string) error {
+	return nil
+}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 
 	"math/rand"
 
@@ -14,25 +15,75 @@ var (
 	ErrEmptyRequest         = errors.New("empty request")
 	ErrInvalidURL           = errors.New("invalid URL")
 	ErrMissingCorrelationID = errors.New("missing correlation ID")
+	ErrQueueFull            = errors.New("delete queue is full")
 
 	ErrFailedToGenerateID = errors.New("failed to generate unique ID")
 	ErrURLAlreadyExists   = errors.New("URL already exists")
 	ErrIDAlreadyExists    = errors.New("ID already exists")
 	ErrURLNotFound        = errors.New("URL not found")
+	ErrURLDeleted         = errors.New("URL deleted")
 
 	ErrRepository = errors.New("repository error")
 )
 
 type URLService struct {
-	repo    repository.URLRepository
-	baseURL string
+	repo        repository.URLRepository
+	baseURL     string
+	deleteQueue chan model.DeleteTask
+	cancelFunc  context.CancelFunc
+	workerCount int
 }
 
-func NewURLService(repo repository.URLRepository, baseURL string) *URLService {
-	return &URLService{
-		repo:    repo,
-		baseURL: baseURL,
+func NewURLService(repo repository.URLRepository, baseURL string, queueSize, workerCount int) *URLService {
+	deleteQueue := make(chan model.DeleteTask, queueSize)
+	svc := &URLService{
+		repo:        repo,
+		baseURL:     baseURL,
+		deleteQueue: deleteQueue,
+		workerCount: workerCount,
 	}
+	svc.startWorkers()
+	return svc
+}
+
+func (s *URLService) startWorkers() {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancelFunc = cancel
+
+	for i := 0; i < s.workerCount; i++ {
+		go s.deletionWorker(ctx, i)
+	}
+}
+
+func (s *URLService) deletionWorker(ctx context.Context, workerID int) {
+	log.Printf("Deletion worker %d started", workerID)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("Deletion worker %d stopped", workerID)
+			return
+
+		case task, ok := <-s.deleteQueue:
+			if !ok {
+				log.Printf("Deletion worker %d: queue closed", workerID)
+				return
+			}
+
+			err := s.repo.MarkURLsAsDeleted(ctx, task.ShortURLs, task.UserID)
+			if err != nil {
+				log.Printf("Worker %d: failed to delete URLs for user %s: %v",
+					workerID, task.UserID, err)
+			}
+		}
+	}
+}
+
+func (s *URLService) Shutdown() {
+	if s.cancelFunc != nil {
+		s.cancelFunc()
+	}
+	close(s.deleteQueue)
 }
 
 func generateShortID(l int) string {
@@ -173,6 +224,8 @@ func (s *URLService) BaseGet(ctx context.Context, shortURL string) (string, erro
 	if err != nil {
 		if errors.Is(err, repository.ErrURLNotFound) {
 			return "", ErrURLNotFound
+		} else if errors.Is(err, repository.ErrURLDeleted) {
+			return "", ErrURLDeleted
 		} else {
 			return "", ErrRepository
 		}
@@ -189,4 +242,26 @@ func (s *URLService) BasePost(ctx context.Context, originalURL string, userID st
 	id, err := processURL(ctx, s.repo, originalURL, userID)
 
 	return s.baseURL + "/" + id, err
+}
+
+func (s *URLService) DeleteUserUrls(ctx context.Context, reqs []string, userID string) error {
+
+	if len(reqs) == 0 {
+		return ErrEmptyRequest
+	}
+
+	task := model.DeleteTask{
+		UserID:    userID,
+		ShortURLs: reqs,
+	}
+
+	select {
+	case s.deleteQueue <- task:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return ErrQueueFull
+	}
+
 }

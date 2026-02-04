@@ -12,6 +12,7 @@ var (
 	ErrIDNotFound       = errors.New("ID not found")
 	ErrIDAlreadyExists  = errors.New("ID already exists")
 	ErrURLAlreadyExists = errors.New("URL already exists")
+	ErrURLDeleted       = errors.New("URL deleted")
 )
 
 type URLRepository interface {
@@ -22,6 +23,7 @@ type URLRepository interface {
 	FindIDByURLs(ctx context.Context, urls []string, userID string) (map[string]string, error)
 	Ping(ctx context.Context) error
 	GetUserURLs(ctx context.Context, userID string) (map[string]string, error)
+	MarkURLsAsDeleted(ctx context.Context, urls []string, userID string) error
 }
 
 type UserRepository interface {

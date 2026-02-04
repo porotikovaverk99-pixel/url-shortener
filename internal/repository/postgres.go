@@ -165,10 +165,14 @@ func (ps *PostgresStorage) SaveBatch(ctx context.Context, batch []model.BatchIte
 
 func (ps *PostgresStorage) Get(ctx context.Context, shortID string) (string, error) {
 	var originalURL string
+	var isDeleted bool
 	err := ps.pool.QueryRow(ctx,
-		"SELECT original_url FROM urls WHERE short_url = $1", shortID).Scan(&originalURL)
+		"SELECT original_url, is_deleted FROM urls WHERE short_url = $1", shortID).Scan(&originalURL, &isDeleted)
 	if err != nil {
 		return "", ErrURLNotFound
+	}
+	if isDeleted {
+		return "", ErrURLDeleted
 	}
 	return originalURL, nil
 }
@@ -176,7 +180,7 @@ func (ps *PostgresStorage) Get(ctx context.Context, shortID string) (string, err
 func (ps *PostgresStorage) FindIDByURL(ctx context.Context, url string, userID string) (string, error) {
 	var shortURL string
 	err := ps.pool.QueryRow(ctx,
-		"SELECT short_url FROM urls WHERE original_url = $1 AND user_id = $2", url, userID).Scan(&shortURL)
+		"SELECT short_url FROM urls WHERE original_url = $1 AND user_id = $2 AND is_deleted = FALSE", url, userID).Scan(&shortURL)
 	if err != nil {
 		return "", ErrIDNotFound
 	}
@@ -189,7 +193,7 @@ func (ps *PostgresStorage) FindIDByURLs(ctx context.Context, urls []string, user
 		return map[string]string{}, nil
 	}
 
-	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls WHERE original_url = ANY($1) AND user_id = $2", urls, userID)
+	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls WHERE original_url = ANY($1) AND user_id = $2 AND is_deleted = FALSE", urls, userID)
 
 	if err != nil {
 		return nil, err
@@ -218,7 +222,7 @@ func (ps *PostgresStorage) Ping(ctx context.Context) error {
 
 func (ps *PostgresStorage) GetUserURLs(ctx context.Context, userID string) (map[string]string, error) {
 
-	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls WHERE user_id = $1", userID)
+	rows, err := ps.pool.Query(ctx, "SELECT short_url, original_url FROM urls WHERE user_id = $1 AND is_deleted = FALSE", userID)
 
 	if err != nil {
 		return nil, err
@@ -246,4 +250,24 @@ func (ps *PostgresStorage) CreateUser(ctx context.Context, userID string) error 
 		`INSERT INTO users (id) VALUES ($1) ON CONFLICT DO NOTHING`,
 		userID)
 	return err
+}
+
+func (ps *PostgresStorage) MarkURLsAsDeleted(ctx context.Context, urls []string, userID string) error {
+
+	if len(urls) == 0 {
+		return nil
+	}
+
+	_, err := ps.pool.Exec(ctx,
+		`UPDATE urls 
+		SET is_deleted = TRUE 
+		WHERE short_url = ANY($1) 
+		AND user_id = $2 
+        AND is_deleted = FALSE`, urls, userID)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -9,14 +9,13 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/porotikovaverk99-pixel/url-shortener/internal/repository"
 )
 
 type contextKey string
 
 const userIDKey contextKey = "userID"
 
-func Auth(secretKey string, userRepo repository.UserRepository) func(http.Handler) http.Handler {
+func Auth(secretKey string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
