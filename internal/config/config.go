@@ -4,6 +4,8 @@ import (
 	"flag"
 	"strings"
 
+	"log"
+
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
@@ -21,6 +23,7 @@ func ParseFlags() Config {
 
 	err := cleanenv.ReadEnv(&cfg)
 	if err != nil {
+		log.Printf("Warning: %v", err)
 	}
 
 	flag.StringVar(&cfg.RunAddr, "a", cfg.RunAddr, "address and port to run server")
