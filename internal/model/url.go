@@ -18,7 +18,7 @@ type ResponseShortenBatch struct {
 	ShortURL      string `json:"short_url"`
 }
 
-type ResponseGetAll struct {
+type ResponseGetUserUrls struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 }
@@ -31,4 +31,9 @@ type BatchResult struct {
 type BatchItem struct {
 	ShortURL    string
 	OriginalURL string
+}
+
+type DeleteTask struct {
+	UserID    string
+	ShortURLs []string
 }
