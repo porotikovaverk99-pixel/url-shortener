@@ -3,12 +3,14 @@ package service
 import (
 	"context"
 	"errors"
-	"log"
 
 	"math/rand"
+	"sync"
+	"time"
 
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/repository"
+	"go.uber.org/zap"
 )
 
 var (
@@ -27,20 +29,31 @@ var (
 )
 
 type URLService struct {
-	repo        repository.URLRepository
-	baseURL     string
-	deleteQueue chan model.DeleteTask
-	cancelFunc  context.CancelFunc
-	workerCount int
+	repo          repository.URLRepository
+	baseURL       string
+	deleteQueue   chan model.DeleteTask
+	cancelFunc    context.CancelFunc
+	workerCount   int
+	wg            sync.WaitGroup
+	deleteTimeout time.Duration
+	log           *zap.Logger
 }
 
-func NewURLService(repo repository.URLRepository, baseURL string, queueSize, workerCount int) *URLService {
+func NewURLService(
+	repo repository.URLRepository,
+	baseURL string,
+	queueSize, workerCount int,
+	deleteTimeout time.Duration,
+	log *zap.Logger,
+) *URLService {
 	deleteQueue := make(chan model.DeleteTask, queueSize)
 	svc := &URLService{
-		repo:        repo,
-		baseURL:     baseURL,
-		deleteQueue: deleteQueue,
-		workerCount: workerCount,
+		repo:          repo,
+		baseURL:       baseURL,
+		deleteQueue:   deleteQueue,
+		workerCount:   workerCount,
+		deleteTimeout: deleteTimeout,
+		log:           log,
 	}
 	svc.startWorkers()
 	return svc
@@ -51,39 +64,74 @@ func (s *URLService) startWorkers() {
 	s.cancelFunc = cancel
 
 	for i := 0; i < s.workerCount; i++ {
+		s.wg.Add(1)
 		go s.deletionWorker(ctx, i)
 	}
+
+	s.log.Info("Started deletion workers",
+		zap.Int("worker_count", s.workerCount),
+		zap.Int("queue_size", cap(s.deleteQueue)),
+		zap.Duration("delete_timeout", s.deleteTimeout),
+	)
 }
 
 func (s *URLService) deletionWorker(ctx context.Context, workerID int) {
-	log.Printf("Deletion worker %d started", workerID)
+	s.log.Info("Deletion worker started", zap.Int("worker_id", workerID))
+	defer s.wg.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("Deletion worker %d stopped", workerID)
+			s.log.Info("Deletion worker stopped by context",
+				zap.Int("worker_id", workerID))
 			return
 
 		case task, ok := <-s.deleteQueue:
 			if !ok {
-				log.Printf("Deletion worker %d: queue closed", workerID)
+				s.log.Info("Deletion worker: queue closed",
+					zap.Int("worker_id", workerID))
 				return
 			}
 
-			err := s.repo.MarkURLsAsDeleted(ctx, task.ShortURLs, task.UserID)
+			s.log.Info("Processing delete task",
+				zap.Int("worker_id", workerID),
+				zap.String("user_id", task.UserID),
+				zap.Int("url_count", len(task.ShortURLs)),
+			)
+
+			deleteCtx, cancel := context.WithTimeout(context.Background(), s.deleteTimeout)
+			defer cancel()
+
+			err := s.repo.MarkURLsAsDeleted(deleteCtx, task.ShortURLs, task.UserID)
 			if err != nil {
-				log.Printf("Worker %d: failed to delete URLs for user %s: %v",
-					workerID, task.UserID, err)
+				s.log.Error("Failed to delete URLs",
+					zap.Int("worker_id", workerID),
+					zap.String("user_id", task.UserID),
+					zap.Error(err),
+				)
+			} else {
+				s.log.Info("URLs deleted successfully",
+					zap.Int("worker_id", workerID),
+					zap.String("user_id", task.UserID),
+					zap.Int("url_count", len(task.ShortURLs)),
+				)
 			}
 		}
 	}
 }
 
 func (s *URLService) Shutdown() {
+	s.log.Info("Shutting down URL service")
+
 	if s.cancelFunc != nil {
 		s.cancelFunc()
 	}
+
+	s.wg.Wait()
+
 	close(s.deleteQueue)
+
+	s.log.Info("URL service shutdown completed")
 }
 
 func generateShortID(l int) string {

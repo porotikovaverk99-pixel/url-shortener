@@ -24,6 +24,7 @@ type URLRepository interface {
 	Ping(ctx context.Context) error
 	GetUserURLs(ctx context.Context, userID string) (map[string]string, error)
 	MarkURLsAsDeleted(ctx context.Context, urls []string, userID string) error
+	Close() error
 }
 
 type UserRepository interface {

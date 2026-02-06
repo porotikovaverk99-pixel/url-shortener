@@ -179,3 +179,7 @@ func (ms *MemoryStorage) CreateUser(ctx context.Context, userID string) error {
 func (ms *MemoryStorage) MarkURLsAsDeleted(ctx context.Context, urls []string, userID string) error {
 	return nil
 }
+
+func (ms *MemoryStorage) Close() error {
+	return nil
+}

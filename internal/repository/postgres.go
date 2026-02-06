@@ -271,3 +271,10 @@ func (ps *PostgresStorage) MarkURLsAsDeleted(ctx context.Context, urls []string,
 
 	return nil
 }
+
+func (ps *PostgresStorage) Close() error {
+	if ps.pool != nil {
+		ps.pool.Close()
+	}
+	return nil
+}

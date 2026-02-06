@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/auth"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/config"
@@ -17,6 +19,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	shutdownTimeout       = 15 * time.Second
+	serverShutdownTimeout = 10 * time.Second
+)
+
 func main() {
 
 	cfg := config.ParseFlags()
@@ -24,7 +31,9 @@ func main() {
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer logger.Log.Sync()
+	defer func() {
+		_ = logger.Log.Sync()
+	}()
 
 	var URLRepository repository.URLRepository
 	var err error
@@ -43,23 +52,19 @@ func main() {
 		logger.Log.Info("Using file storage", zap.String("path", cfg.FileStoragePath))
 	}
 
-	URLService := service.NewURLService(URLRepository, cfg.BaseURL, 100, 5)
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		<-stop
-		logger.Log.Info("Shutdown signal received")
-		URLService.Shutdown()
-		os.Exit(0)
-	}()
+	URLService := service.NewURLService(
+		URLRepository,
+		cfg.BaseURL,
+		cfg.DeleteQueueSize,
+		cfg.DeleteWorkers,
+		cfg.DeleteTimeout,
+		logger.Log,
+	)
 
 	URLHandler := hdlr.NewURLHandler(URLService)
-
 	server := svr.New(cfg.RunAddr)
 
 	router := server.Router()
-
 	secretKey := cfg.SecretKey
 	router.Use(auth.Auth(secretKey))
 	router.Use(logger.RequestLogger)
@@ -72,11 +77,67 @@ func main() {
 	server.HandleFunc("/api/shorten/batch", URLHandler.ShortenBatchHandler().ServeHTTP)
 	server.HandleFunc("/api/user/urls", URLHandler.UserUrlsHandler().ServeHTTP)
 
-	logger.Log.Info("Running server", zap.String("address", cfg.RunAddr))
+	serverErr := make(chan error, 1)
+	go func() {
+		logger.Log.Info("Starting server", zap.String("address", cfg.RunAddr))
+		if err := server.Run(); err != nil {
+			serverErr <- err
+		}
+	}()
 
-	err = server.Run()
-	if err != nil {
-		logger.Log.Fatal("Error occurs while running server", zap.Error(err))
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case err := <-serverErr:
+		logger.Log.Error("Server stopped with error", zap.Error(err))
+		gracefulShutdown(server, URLService, URLRepository, logger.Log)
+		os.Exit(1)
+
+	case sig := <-sigChan:
+		logger.Log.Info("Received shutdown signal", zap.String("signal", sig.String()))
+		gracefulShutdown(server, URLService, URLRepository, logger.Log)
+		logger.Log.Info("Application shutdown completed")
 	}
 
+}
+
+func gracefulShutdown(
+	server *svr.Server,
+	service *service.URLService,
+	repo repository.URLRepository,
+	log *zap.Logger,
+) {
+	log.Info("Starting graceful shutdown")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	log.Info("Shutting down HTTP server...")
+	serverCtx, serverCancel := context.WithTimeout(shutdownCtx, serverShutdownTimeout)
+	defer serverCancel()
+
+	if err := server.Shutdown(serverCtx); err != nil {
+		log.Error("HTTP server shutdown error", zap.Error(err))
+	} else {
+		log.Info("HTTP server stopped gracefully")
+	}
+
+	log.Info("Shutting down background workers...")
+	service.Shutdown()
+	log.Info("Background workers stopped")
+
+	log.Info("Closing repository...")
+	if err := repo.Close(); err != nil {
+		log.Error("Failed to close repository", zap.Error(err))
+	} else {
+		log.Info("Repository closed")
+	}
+
+	select {
+	case <-shutdownCtx.Done():
+		log.Warn("Shutdown timed out - some operations may not have completed")
+	default:
+		log.Info("Graceful shutdown completed successfully")
+	}
 }

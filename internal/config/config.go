@@ -5,17 +5,21 @@ import (
 	"strings"
 
 	"log"
+	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type Config struct {
-	RunAddr         string `env:"SERVER_ADDRESS" env-default:":8080" flag:"a" flag-desc:"address and port to run server"`
-	BaseURL         string `env:"BASE_URL" flag:"b" flag-desc:"base URL for shortened URLs"`
-	LogLevel        string `env:"LOG_LEVEL" env-default:"Info" flag:"l" flag-desc:"log level"`
-	FileStoragePath string `env:"FILE_STORAGE_PATH" env-default:"storage.json" flag:"f" flag-desc:"file storage path"`
-	DatabaseDSN     string `env:"DATABASE_DSN" flag:"d" flag-desc:"database dsn"`
-	SecretKey       string `env:"SECRET_KEY" flag:"k" flag-desc:"secret key"`
+	RunAddr         string        `env:"SERVER_ADDRESS" env-default:":8080" flag:"a" flag-desc:"address and port to run server"`
+	BaseURL         string        `env:"BASE_URL" flag:"b" flag-desc:"base URL for shortened URLs"`
+	LogLevel        string        `env:"LOG_LEVEL" env-default:"Info" flag:"l" flag-desc:"log level"`
+	FileStoragePath string        `env:"FILE_STORAGE_PATH" env-default:"storage.json" flag:"f" flag-desc:"file storage path"`
+	DatabaseDSN     string        `env:"DATABASE_DSN" flag:"d" flag-desc:"database dsn"`
+	SecretKey       string        `env:"SECRET_KEY" flag:"k" flag-desc:"secret key"`
+	DeleteQueueSize int           `env:"DELETE_QUEUE_SIZE" env-default:"100" flag:"q" flag-desc:"delete queue size"`
+	DeleteWorkers   int           `env:"DELETE_WORKERS" env-default:"5" flag:"w" flag-desc:"delete workers count"`
+	DeleteTimeout   time.Duration `env:"DELETE_TIMEOUT" env-default:"30s" flag:"t" flag-desc:"delete operation timeout"`
 }
 
 func ParseFlags() Config {
@@ -32,6 +36,9 @@ func ParseFlags() Config {
 	flag.StringVar(&cfg.FileStoragePath, "f", cfg.FileStoragePath, "file storage path")
 	flag.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "database dsn")
 	flag.StringVar(&cfg.SecretKey, "k", cfg.SecretKey, "secret key")
+	flag.IntVar(&cfg.DeleteQueueSize, "q", cfg.DeleteQueueSize, "delete queue size")
+	flag.IntVar(&cfg.DeleteWorkers, "w", cfg.DeleteWorkers, "delete workers count")
+	flag.DurationVar(&cfg.DeleteTimeout, "t", cfg.DeleteTimeout, "delete operation timeout")
 
 	flag.Parse()
 
