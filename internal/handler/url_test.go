@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	jwt "github.com/golang-jwt/jwt/v5"
@@ -21,6 +22,7 @@ import (
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 const testSecretKey = "test-secret-key-for-tests"
@@ -42,7 +44,7 @@ func setupTest() (*URLHandler, repository.URLRepository, func(), error) {
 		return nil, nil, nil, err
 	}
 
-	urlService := service.NewURLService(repo, "http://localhost:8080", 100, 5)
+	urlService := service.NewURLService(repo, "http://localhost:8080", 100, 5, 30*time.Second, zap.NewNop())
 	handler := NewURLHandler(urlService)
 
 	cleanup := func() {
@@ -327,7 +329,7 @@ func TestGzipCompression(t *testing.T) {
 	ctx := context.WithValue(context.Background(), userIDContextKey, "test-user-id")
 	repo.Save(ctx, "abcdef", "google.ru", "test-user-id")
 
-	urlService := service.NewURLService(repo, "http://localhost:8080", 100, 5)
+	urlService := service.NewURLService(repo, "http://localhost:8080", 100, 5, 30*time.Second, zap.NewNop())
 	handler := NewURLHandler(urlService)
 
 	r := chi.NewRouter()
