@@ -1,4 +1,4 @@
-package auth
+package middleware
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "userID"
+const UserIDKey contextKey = "userID"
 
 func Auth(secretKey string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
@@ -46,7 +46,7 @@ func Auth(secretKey string) func(http.Handler) http.Handler {
 				userID = extractUserID(cookie.Value)
 			}
 
-			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			ctx := context.WithValue(r.Context(), UserIDKey, userID)
 			h.ServeHTTP(w, r.WithContext(ctx))
 
 		})
@@ -88,6 +88,6 @@ func signUserID(userID string, key []byte) string {
 }
 
 func GetUserID(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(userIDKey).(string)
+	userID, ok := ctx.Value(UserIDKey).(string)
 	return userID, ok && userID != ""
 }

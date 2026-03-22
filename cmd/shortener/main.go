@@ -8,11 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/porotikovaverk99-pixel/url-shortener/internal/auth"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/audit"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/config"
 	packgzip "github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
 	hdlr "github.com/porotikovaverk99-pixel/url-shortener/internal/handler"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/logger"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/middleware"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/repository"
 	svr "github.com/porotikovaverk99-pixel/url-shortener/internal/server"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
@@ -52,6 +53,18 @@ func main() {
 		logger.Log.Info("Using file storage", zap.String("path", cfg.FileStoragePath))
 	}
 
+	auditManager := audit.NewManager()
+
+	if cfg.FileAuditPath != "" {
+		auditManager.AddObserver(audit.NewFileObserver(cfg.FileAuditPath))
+		log.Printf("File audit enabled: %s", cfg.FileAuditPath)
+	}
+
+	if cfg.URLAudit != "" {
+		auditManager.AddObserver(audit.NewHTTPObserver(cfg.URLAudit))
+		log.Printf("HTTP audit enabled: %s", cfg.URLAudit)
+	}
+
 	URLService := service.NewURLService(
 		URLRepository,
 		cfg.BaseURL,
@@ -66,13 +79,17 @@ func main() {
 
 	router := server.Router()
 	secretKey := cfg.SecretKey
-	router.Use(auth.Auth(secretKey))
+
+	router.Use(middleware.Auth(secretKey))
 	router.Use(logger.RequestLogger)
 	router.Use(packgzip.GzipMiddleware)
 
-	server.HandleFunc("/", URLHandler.BaseHandler().ServeHTTP)
-	server.HandleFunc("/{id}", URLHandler.BaseHandler().ServeHTTP)
-	server.HandleFunc("/api/shorten", URLHandler.ShortenHandler().ServeHTTP)
+	auditMid := middleware.AuditMiddleware(auditManager)
+
+	server.HandleFunc("/", auditMid(URLHandler.BaseHandler()).ServeHTTP)
+	server.HandleFunc("/{id}", auditMid(URLHandler.BaseHandler()).ServeHTTP)
+	server.HandleFunc("/api/shorten", auditMid(URLHandler.ShortenHandler()).ServeHTTP)
+
 	server.HandleFunc("/ping", URLHandler.PingHandler().ServeHTTP)
 	server.HandleFunc("/api/shorten/batch", URLHandler.ShortenBatchHandler().ServeHTTP)
 	server.HandleFunc("/api/user/urls", URLHandler.UserUrlsHandler().ServeHTTP)

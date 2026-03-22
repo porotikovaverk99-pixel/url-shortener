@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/porotikovaverk99-pixel/url-shortener/internal/auth"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/middleware"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
 )
@@ -63,7 +63,7 @@ func (h *URLHandler) BaseHandler() http.Handler {
 				return
 			}
 
-			userID, ok := auth.GetUserID(r.Context())
+			userID, ok := middleware.GetUserID(r.Context())
 			if !ok {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
@@ -127,7 +127,7 @@ func (h *URLHandler) ShortenHandler() http.Handler {
 			return
 		}
 
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := middleware.GetUserID(r.Context())
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -190,7 +190,7 @@ func (h *URLHandler) ShortenBatchHandler() http.Handler {
 			return
 		}
 
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := middleware.GetUserID(r.Context())
 		if !ok {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -260,7 +260,7 @@ func (h *URLHandler) UserUrlsHandler() http.Handler {
 
 		if r.Method == http.MethodGet {
 
-			userID, ok := auth.GetUserID(r.Context())
+			userID, ok := middleware.GetUserID(r.Context())
 			if !ok {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
@@ -287,7 +287,7 @@ func (h *URLHandler) UserUrlsHandler() http.Handler {
 
 		} else if r.Method == http.MethodDelete {
 
-			userID, ok := auth.GetUserID(r.Context())
+			userID, ok := middleware.GetUserID(r.Context())
 			if !ok {
 				w.WriteHeader(http.StatusUnauthorized)
 				return

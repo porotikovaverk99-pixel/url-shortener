@@ -20,6 +20,8 @@ type Config struct {
 	DeleteQueueSize int           `env:"DELETE_QUEUE_SIZE" env-default:"100" flag:"q" flag-desc:"delete queue size"`
 	DeleteWorkers   int           `env:"DELETE_WORKERS" env-default:"5" flag:"w" flag-desc:"delete workers count"`
 	DeleteTimeout   time.Duration `env:"DELETE_TIMEOUT" env-default:"30s" flag:"t" flag-desc:"delete operation timeout"`
+	FileAuditPath   string        `env:"AUDIT_FILE" env-default:"audit.json" flag:"audit-file" flag-desc:"file audit path"`
+	URLAudit        string        `env:"AUDIT_URL" flag:"audit-url" flag-desc:"audit url"`
 }
 
 func ParseFlags() Config {
@@ -39,6 +41,7 @@ func ParseFlags() Config {
 	flag.IntVar(&cfg.DeleteQueueSize, "q", cfg.DeleteQueueSize, "delete queue size")
 	flag.IntVar(&cfg.DeleteWorkers, "w", cfg.DeleteWorkers, "delete workers count")
 	flag.DurationVar(&cfg.DeleteTimeout, "t", cfg.DeleteTimeout, "delete operation timeout")
+	flag.StringVar(&cfg.FileAuditPath, "audit-file", cfg.FileAuditPath, "file audit path")
 
 	flag.Parse()
 

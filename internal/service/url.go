@@ -13,6 +13,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+    shortIDLength       = 8
+    maxGenerateAttempts = 100
+)
+
 var (
 	ErrEmptyRequest         = errors.New("empty request")
 	ErrInvalidURL           = errors.New("invalid URL")
@@ -150,7 +155,7 @@ func processURL(ctx context.Context, repo repository.URLRepository, url string, 
 		return foundID, ErrURLAlreadyExists
 	}
 
-	id := generateShortID(8)
+	id := generateShortID(shortIDLength)
 	err = repo.Save(ctx, id, url, userID)
 
 	if err != nil {
@@ -216,13 +221,13 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.Request
 		if foundID, ok := foundIDs[item.OriginalURL]; ok {
 			ressBatch = append(ressBatch, model.ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: s.baseURL + "/" + foundID})
 		} else {
-			generatedID := generateShortID(8)
+			generatedID := generateShortID(shortIDLength)
 			attempts := 0
-			for generatedIDs[generatedID] && attempts < 100 {
-				generatedID = generateShortID(8)
+			for generatedIDs[generatedID] && attempts < maxGenerateAttempts {
+				generatedID = generateShortID(shortIDLength)
 				attempts++
 			}
-			if attempts >= 100 {
+			if attempts >= maxGenerateAttempts {
 				return nil, ErrFailedToGenerateID
 			}
 			generatedIDs[generatedID] = true
