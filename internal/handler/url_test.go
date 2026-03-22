@@ -15,8 +15,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	jwt "github.com/golang-jwt/jwt/v5"
-	"github.com/porotikovaverk99-pixel/url-shortener/internal/auth"
 	packgzip "github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/middleware"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/repository"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
@@ -173,7 +173,7 @@ func TestURLHandler_BaseHandler(t *testing.T) {
 			}
 
 			r := chi.NewRouter()
-			r.Use(auth.Auth(testSecretKey))
+			r.Use(middleware.Auth(testSecretKey))
 			r.Method(http.MethodPost, "/", handler.BaseHandler())
 			r.Method(http.MethodGet, "/{id}", handler.BaseHandler())
 			r.Method(http.MethodPut, "/", handler.BaseHandler())
@@ -282,7 +282,7 @@ func TestURLHandler_ShortenHandler(t *testing.T) {
 			}
 
 			r := chi.NewRouter()
-			r.Use(auth.Auth(testSecretKey))
+			r.Use(middleware.Auth(testSecretKey))
 			r.Method(http.MethodPost, "/api/shorten", handler.ShortenHandler())
 			r.Method(http.MethodGet, "/api/shorten", handler.ShortenHandler())
 
@@ -333,7 +333,7 @@ func TestGzipCompression(t *testing.T) {
 	handler := NewURLHandler(urlService)
 
 	r := chi.NewRouter()
-	r.Use(auth.Auth(testSecretKey))
+	r.Use(middleware.Auth(testSecretKey))
 	handlerMiddleware := packgzip.GzipMiddleware(handler.ShortenHandler())
 	r.Post("/api/shorten", handlerMiddleware.ServeHTTP)
 
@@ -441,7 +441,7 @@ func TestURLHandler_ShortenBatchHandler(t *testing.T) {
 			defer cleanup()
 
 			r := chi.NewRouter()
-			r.Use(auth.Auth(testSecretKey))
+			r.Use(middleware.Auth(testSecretKey))
 			r.Method(http.MethodPost, "/api/shorten/batch", handler.ShortenBatchHandler())
 			r.Method(http.MethodGet, "/api/shorten/batch", handler.ShortenBatchHandler())
 
@@ -497,7 +497,7 @@ func TestURLHandler_PingHandler(t *testing.T) {
 			defer cleanup()
 
 			r := chi.NewRouter()
-			r.Use(auth.Auth(testSecretKey))
+			r.Use(middleware.Auth(testSecretKey))
 			r.Method(http.MethodGet, "/ping", handler.PingHandler())
 			r.Method(http.MethodPost, "/ping", handler.PingHandler())
 
@@ -557,7 +557,7 @@ func TestURLHandler_GetAllHandler(t *testing.T) {
 			}
 
 			r := chi.NewRouter()
-			r.Use(auth.Auth(testSecretKey))
+			r.Use(middleware.Auth(testSecretKey))
 			r.Method(http.MethodGet, "/api/user/urls", handler.UserUrlsHandler())
 			r.Method(http.MethodPost, "/api/user/urls", handler.UserUrlsHandler())
 

@@ -49,7 +49,7 @@ func AuditMiddleware(manager *audit.Manager) func(http.Handler) http.Handler {
 				}
 				if originalURL != "" {
 					event := audit.Event{
-						Ts:     time.Now().Unix(),
+						TS:     time.Now().Unix(),
 						Action: action,
 						UserID: getUserID(r),
 						URL:    originalURL,
