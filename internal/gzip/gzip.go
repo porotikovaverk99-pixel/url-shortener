@@ -2,24 +2,24 @@ package gzip
 
 import (
 	"compress/gzip"
-	"net/http"
 	"io"
+	"net/http"
 	"strings"
 )
 
 type compressWriter struct {
-	w http.ResponseWriter
+	w  http.ResponseWriter
 	zw *gzip.Writer
 }
 
 type compressReader struct {
-	r io.ReadCloser
+	r  io.ReadCloser
 	zr *gzip.Reader
 }
 
 func NewCompressWriter(w http.ResponseWriter) *compressWriter {
 	return &compressWriter{
-		w: w,
+		w:  w,
 		zw: gzip.NewWriter(w),
 	}
 }
@@ -30,7 +30,7 @@ func NewCompressReader(r io.ReadCloser) (*compressReader, error) {
 		return nil, err
 	}
 	return &compressReader{
-		r: r,
+		r:  r,
 		zr: zr,
 	}, nil
 }
@@ -60,9 +60,9 @@ func (cr *compressReader) Read(b []byte) (int, error) {
 
 func (cr *compressReader) Close() error {
 	if err := cr.r.Close(); err != nil {
-        return err
-    }
-    return cr.zr.Close()
+		return err
+	}
+	return cr.zr.Close()
 }
 
 func GzipMiddleware(h http.Handler) http.Handler {
