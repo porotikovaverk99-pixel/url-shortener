@@ -12,14 +12,21 @@ var (
 	ErrIDNotFound       = errors.New("ID not found")
 	ErrIDAlreadyExists  = errors.New("ID already exists")
 	ErrURLAlreadyExists = errors.New("URL already exists")
+	ErrURLDeleted       = errors.New("URL deleted")
 )
 
 type URLRepository interface {
-	Save(ctx context.Context, short string, original string) error
-	SaveBatch(ctx context.Context, batch []model.BatchItem) error
+	Save(ctx context.Context, short string, original string, userID string) error
+	SaveBatch(ctx context.Context, batch []model.BatchItem, userID string) error
 	Get(ctx context.Context, short string) (string, error)
-	FindIDByURL(ctx context.Context, url string) (string, error)
-	FindIDByURLs(ctx context.Context, urls []string) (map[string]string, error)
+	FindIDByURL(ctx context.Context, url string, userID string) (string, error)
+	FindIDByURLs(ctx context.Context, urls []string, userID string) (map[string]string, error)
 	Ping(ctx context.Context) error
-	GetAll(ctx context.Context) (map[string]string, error)
+	GetUserURLs(ctx context.Context, userID string) (map[string]string, error)
+	MarkURLsAsDeleted(ctx context.Context, urls []string, userID string) error
+	Close() error
+}
+
+type UserRepository interface {
+	CreateUser(ctx context.Context, userID string) error
 }

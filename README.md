@@ -42,3 +42,31 @@ git fetch template && git checkout template/v2 .github
 - **Clean Architecture**
 - **Hexagonal Architecture**
 - **Layered Architecture**
+
+## Инкремент 17. Оптимизация памяти
+
+### Результат сравнения профилей
+
+```bash
+go tool pprof -top -diff_base=profiles/base_mem.pprof profiles/result_mem_v2.pprof
+```
+
+```
+File: service.test.exe
+Type: alloc_space
+Showing nodes accounting for -168.25MB, 5.38% of 3125.53MB total
+
+      flat  flat%   sum%        cum   cum%
+ -339.86MB 10.87% 10.87%  -339.86MB 10.87%  repository.(*MemoryStorage).FindIDByURLs
+  142.50MB  4.56%  6.31%   142.50MB  4.56%  service.(*URLService).Shorten
+   28.60MB  0.92%  5.40%  -311.25MB  9.96%  service.(*URLService).ShortenBatch
+```
+
+### Улучшения производительности
+
+| Бенчмарк | Было | Стало | Ускорение |
+|----------|------|-------|-----------|
+| Shorten | 131.3 ns/op | 118.6 ns/op | +9.7% |
+| ShortenBatch_10 | 4030 ns/op | 2699 ns/op | +33% |
+| ShortenBatch_1000 | 3719011 ns/op | 1950743 ns/op | +47.5% |
+```

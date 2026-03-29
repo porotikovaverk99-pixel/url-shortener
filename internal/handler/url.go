@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/porotikovaverk99-pixel/url-shortener/internal/middleware"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
 )
@@ -31,6 +32,7 @@ func (h *URLHandler) BaseHandler() http.Handler {
 				jsonError(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
 			}
+
 			result, err := h.service.BaseGet(r.Context(), id)
 			if err != nil {
 				switch err {
@@ -38,6 +40,8 @@ func (h *URLHandler) BaseHandler() http.Handler {
 					jsonError(w, "URL not found", http.StatusNotFound)
 				case service.ErrRepository:
 					jsonError(w, "Database error", http.StatusInternalServerError)
+				case service.ErrURLDeleted:
+					jsonError(w, "URL deleted", http.StatusGone)
 				default:
 					jsonError(w, "Internal server error", http.StatusInternalServerError)
 				}
@@ -59,7 +63,13 @@ func (h *URLHandler) BaseHandler() http.Handler {
 				return
 			}
 
-			result, err := h.service.BasePost(r.Context(), originalURL)
+			userID, ok := middleware.GetUserID(r.Context())
+			if !ok {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
+			result, err := h.service.BasePost(r.Context(), originalURL, userID)
 
 			if err != nil {
 				switch err {
@@ -117,7 +127,13 @@ func (h *URLHandler) ShortenHandler() http.Handler {
 			return
 		}
 
-		result, err := h.service.Shorten(r.Context(), reqs)
+		userID, ok := middleware.GetUserID(r.Context())
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		result, err := h.service.Shorten(r.Context(), reqs, userID)
 
 		if err != nil {
 			switch err {
@@ -174,7 +190,13 @@ func (h *URLHandler) ShortenBatchHandler() http.Handler {
 			return
 		}
 
-		result, err := h.service.ShortenBatch(r.Context(), reqsBatch)
+		userID, ok := middleware.GetUserID(r.Context())
+		if !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		result, err := h.service.ShortenBatch(r.Context(), reqsBatch, userID)
 
 		if err != nil {
 			switch err {
@@ -232,26 +254,79 @@ func (h *URLHandler) PingHandler() http.Handler {
 	})
 }
 
-func (h *URLHandler) GetAllHandler() http.Handler {
+func (h *URLHandler) UserUrlsHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		if r.Method != http.MethodGet {
+		if r.Method == http.MethodGet {
+
+			userID, ok := middleware.GetUserID(r.Context())
+			if !ok {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
+			result, err := h.service.GetUserUrls(r.Context(), userID)
+			if err != nil {
+				jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
+			if len(result) == 0 {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+
+			if err := json.NewEncoder(w).Encode(result); err != nil {
+				jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+
+		} else if r.Method == http.MethodDelete {
+
+			userID, ok := middleware.GetUserID(r.Context())
+			if !ok {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+
+			defer r.Body.Close()
+
+			contentType := r.Header.Get("Content-Type")
+
+			if !strings.HasPrefix(contentType, "application/json") {
+				jsonError(w, http.StatusText(http.StatusUnsupportedMediaType), http.StatusUnsupportedMediaType)
+				return
+			}
+
+			var reqs []string
+
+			if err := json.NewDecoder(r.Body).Decode(&reqs); err != nil {
+				jsonError(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			}
+
+			err := h.service.DeleteUserUrls(r.Context(), reqs, userID)
+
+			if err != nil {
+				switch err {
+				case service.ErrEmptyRequest:
+					jsonError(w, "No URLs to delete", http.StatusBadRequest)
+				case service.ErrQueueFull:
+					jsonError(w, "Service is busy, try again later", http.StatusServiceUnavailable)
+				default:
+					jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				}
+				return
+			}
+
+			w.WriteHeader(http.StatusAccepted)
+
+		} else {
 			jsonError(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
-		result, err := h.service.GetAll(r.Context())
-		if err != nil {
-			jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-
-		if err := json.NewEncoder(w).Encode(result); err != nil {
-			jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 

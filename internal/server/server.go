@@ -4,12 +4,15 @@ import (
 	"net/http"
 	"time"
 
+	"context"
+
 	"github.com/go-chi/chi/v5"
 )
 
 type Server struct {
-	router *chi.Mux
-	addr   string
+	router     *chi.Mux
+	addr       string
+	httpServer *http.Server
 }
 
 func New(addr string) *Server {
@@ -17,6 +20,14 @@ func New(addr string) *Server {
 		router: chi.NewRouter(),
 		addr:   addr,
 	}
+}
+
+func (s *Server) Router() *chi.Mux {
+	return s.router
+}
+
+func (s *Server) Use(middleware func(http.Handler) http.Handler) {
+	s.router.Use(middleware)
 }
 
 func (s *Server) HandleFunc(pattern string, handler http.HandlerFunc) {
@@ -44,7 +55,7 @@ func (s *Server) Delete(pattern string, handler http.HandlerFunc) {
 }
 
 func (s *Server) Run() error {
-	server := &http.Server{
+	s.httpServer = &http.Server{
 		Addr:              s.addr,
 		Handler:           s.router,
 		ReadTimeout:       10 * time.Second,
@@ -53,5 +64,12 @@ func (s *Server) Run() error {
 		ReadHeaderTimeout: 2 * time.Second,
 	}
 
-	return server.ListenAndServe()
+	return s.httpServer.ListenAndServe()
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	if s.httpServer != nil {
+		return s.httpServer.Shutdown(ctx)
+	}
+	return nil
 }
