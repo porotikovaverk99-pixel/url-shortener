@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-
 	"math/rand"
 	"sync"
 	"time"
@@ -14,8 +13,8 @@ import (
 )
 
 const (
-    shortIDLength       = 8
-    maxGenerateAttempts = 100
+	shortIDLength       = 8
+	maxGenerateAttempts = 100
 )
 
 var (
@@ -32,6 +31,8 @@ var (
 
 	ErrRepository = errors.New("repository error")
 )
+
+const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 type URLService struct {
 	repo          repository.URLRepository
@@ -139,36 +140,34 @@ func (s *URLService) Shutdown() {
 	s.log.Info("URL service shutdown completed")
 }
 
+var charsBytes = []byte(chars)
+
 func generateShortID(l int) string {
-	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	result := make([]byte, l)
-	for i := range result {
-		result[i] = chars[rand.Intn(len(chars))]
+	b := make([]byte, l)
+	for i := range b {
+		b[i] = charsBytes[rand.Intn(len(charsBytes))]
 	}
-	return string(result)
+	return string(b)
 }
 
 func processURL(ctx context.Context, repo repository.URLRepository, url string, userID string) (string, error) {
-
 	foundID, err := repo.FindIDByURL(ctx, url, userID)
 	if err == nil {
 		return foundID, ErrURLAlreadyExists
 	}
 
-	id := generateShortID(shortIDLength)
-	err = repo.Save(ctx, id, url, userID)
-
-	if err != nil {
-		switch {
-		case errors.Is(err, repository.ErrIDAlreadyExists):
-			return "", ErrIDAlreadyExists
-		default:
+	for attempt := 0; attempt < maxGenerateAttempts; attempt++ {
+		id := generateShortID(shortIDLength)
+		err = repo.Save(ctx, id, url, userID)
+		if err == nil {
+			return id, nil
+		}
+		if !errors.Is(err, repository.ErrIDAlreadyExists) {
 			return "", ErrRepository
 		}
 	}
 
-	return id, nil
-
+	return "", ErrFailedToGenerateID
 }
 
 func (s *URLService) Ping(ctx context.Context) error {
@@ -180,6 +179,11 @@ func (s *URLService) GetUserUrls(ctx context.Context, userID string) ([]model.Re
 	if err != nil {
 		return nil, err
 	}
+
+	if len(result) == 0 {
+		return []model.ResponseGetUserUrls{}, nil
+	}
+
 	ressGetAll := make([]model.ResponseGetUserUrls, 0, len(result))
 	for originalURL, shortURL := range result {
 		ressGetAll = append(ressGetAll, model.ResponseGetUserUrls{
@@ -191,21 +195,20 @@ func (s *URLService) GetUserUrls(ctx context.Context, userID string) ([]model.Re
 }
 
 func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.RequestShortenBatch, userID string) (*model.BatchResult, error) {
-
 	if len(reqsBatch) == 0 {
 		return nil, ErrEmptyRequest
 	}
 
-	urls := make([]string, 0, len(reqsBatch))
+	urls := make([]string, len(reqsBatch))
 
-	for _, item := range reqsBatch {
+	for i, item := range reqsBatch {
 		if item.OriginalURL == "" {
 			return nil, ErrInvalidURL
 		}
 		if item.CorrelationID == "" {
 			return nil, ErrMissingCorrelationID
 		}
-		urls = append(urls, item.OriginalURL)
+		urls[i] = item.OriginalURL
 	}
 
 	foundIDs, err := s.repo.FindIDByURLs(ctx, urls, userID)
@@ -213,40 +216,37 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.Request
 		return nil, ErrRepository
 	}
 
-	batch := []model.BatchItem{}
 	ressBatch := make([]model.ResponseShortenBatch, 0, len(reqsBatch))
-	generatedIDs := make(map[string]bool)
+	batch := make([]model.BatchItem, 0, len(reqsBatch))
+	createdNew := false
 
 	for _, item := range reqsBatch {
 		if foundID, ok := foundIDs[item.OriginalURL]; ok {
-			ressBatch = append(ressBatch, model.ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: s.baseURL + "/" + foundID})
+			ressBatch = append(ressBatch, model.ResponseShortenBatch{
+				CorrelationID: item.CorrelationID,
+				ShortURL:      s.baseURL + "/" + foundID,
+			})
 		} else {
+			createdNew = true
 			generatedID := generateShortID(shortIDLength)
-			attempts := 0
-			for generatedIDs[generatedID] && attempts < maxGenerateAttempts {
-				generatedID = generateShortID(shortIDLength)
-				attempts++
-			}
-			if attempts >= maxGenerateAttempts {
-				return nil, ErrFailedToGenerateID
-			}
-			generatedIDs[generatedID] = true
-			batch = append(batch, model.BatchItem{ShortURL: generatedID, OriginalURL: item.OriginalURL})
-			ressBatch = append(ressBatch, model.ResponseShortenBatch{CorrelationID: item.CorrelationID, ShortURL: s.baseURL + "/" + generatedID})
+			batch = append(batch, model.BatchItem{
+				ShortURL:    generatedID,
+				OriginalURL: item.OriginalURL,
+			})
+			ressBatch = append(ressBatch, model.ResponseShortenBatch{
+				CorrelationID: item.CorrelationID,
+				ShortURL:      s.baseURL + "/" + generatedID,
+			})
 		}
 	}
-
-	createdNew := len(batch) > 0
 
 	if createdNew {
 		err = s.repo.SaveBatch(ctx, batch, userID)
 		if err != nil {
-			switch {
-			case errors.Is(err, repository.ErrIDAlreadyExists):
+			if errors.Is(err, repository.ErrIDAlreadyExists) {
 				return nil, ErrIDAlreadyExists
-			default:
-				return nil, ErrRepository
 			}
+			return nil, ErrRepository
 		}
 	}
 
@@ -257,7 +257,6 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.Request
 }
 
 func (s *URLService) Shorten(ctx context.Context, reqs model.RequestShorten, userID string) (model.ResponseShorten, error) {
-
 	if reqs.URL == "" {
 		return model.ResponseShorten{}, ErrInvalidURL
 	}
@@ -287,7 +286,6 @@ func (s *URLService) BaseGet(ctx context.Context, shortURL string) (string, erro
 }
 
 func (s *URLService) BasePost(ctx context.Context, originalURL string, userID string) (string, error) {
-
 	if originalURL == "" {
 		return "", ErrInvalidURL
 	}
@@ -298,7 +296,6 @@ func (s *URLService) BasePost(ctx context.Context, originalURL string, userID st
 }
 
 func (s *URLService) DeleteUserUrls(ctx context.Context, reqs []string, userID string) error {
-
 	if len(reqs) == 0 {
 		return ErrEmptyRequest
 	}
@@ -316,5 +313,4 @@ func (s *URLService) DeleteUserUrls(ctx context.Context, reqs []string, userID s
 	default:
 		return ErrQueueFull
 	}
-
 }
