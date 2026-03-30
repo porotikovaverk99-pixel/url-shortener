@@ -12,16 +12,22 @@ import (
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/service"
 )
 
+// URLHandler обрабатывает HTTP-запросы для операций сокращения URL.
 type URLHandler struct {
 	service *service.URLService
 }
 
+// NewURLHandler создает новый экземпляр URLHandler с переданным сервисом.
 func NewURLHandler(service *service.URLService) *URLHandler {
 	return &URLHandler{
 		service: service,
 	}
 }
 
+// BaseHandler возвращает HTTP-обработчик для базовых операций с URL.
+// Поддерживает:
+//   - GET /{id} - перенаправление на оригинальный URL
+//   - POST / - создание короткого URL из текстового тела запроса
 func (h *URLHandler) BaseHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -101,6 +107,9 @@ func (h *URLHandler) BaseHandler() http.Handler {
 	})
 }
 
+// ShortenHandler возвращает HTTP-обработчик для сокращения URL в формате JSON.
+// Принимает POST-запросы с JSON-телом: {"url": "https://example.com"}
+// Возвращает сокращенный URL в формате JSON.
 func (h *URLHandler) ShortenHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -164,6 +173,9 @@ func (h *URLHandler) ShortenHandler() http.Handler {
 	})
 }
 
+// ShortenBatchHandler возвращает HTTP-обработчик для пакетного сокращения URL.
+// Принимает POST-запросы с JSON-телом, содержащим несколько URL.
+// Возвращает список сокращенных URL с идентификаторами корреляции.
 func (h *URLHandler) ShortenBatchHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -232,6 +244,8 @@ func (h *URLHandler) ShortenBatchHandler() http.Handler {
 	})
 }
 
+// PingHandler возвращает HTTP-обработчик для проверки подключения к базе данных.
+// Принимает GET-запросы и возвращает 200 OK при успешном подключении к БД.
 func (h *URLHandler) PingHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -253,6 +267,10 @@ func (h *URLHandler) PingHandler() http.Handler {
 	})
 }
 
+// UserUrlsHandler возвращает HTTP-обработчик для управления URL пользователя.
+// Поддерживает:
+//   - GET /api/user/urls - возвращает все URL для аутентифицированного пользователя
+//   - DELETE /api/user/urls - удаляет указанные URL для аутентифицированного пользователя
 func (h *URLHandler) UserUrlsHandler() http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -18,22 +18,33 @@ const (
 )
 
 var (
-	ErrEmptyRequest         = errors.New("empty request")
-	ErrInvalidURL           = errors.New("invalid URL")
+	// ErrEmptyRequest возвращается при пустом запросе
+	ErrEmptyRequest = errors.New("empty request")
+	// ErrInvalidURL возвращается при некорректном URL
+	ErrInvalidURL = errors.New("invalid URL")
+	// ErrMissingCorrelationID возвращается при отсутствии correlation ID в пакетном запросе
 	ErrMissingCorrelationID = errors.New("missing correlation ID")
-	ErrQueueFull            = errors.New("delete queue is full")
+	// ErrQueueFull возвращается когда очередь удаления переполнена
+	ErrQueueFull = errors.New("delete queue is full")
 
+	// ErrFailedToGenerateID возвращается при невозможности сгенерировать уникальный ID
 	ErrFailedToGenerateID = errors.New("failed to generate unique ID")
-	ErrURLAlreadyExists   = errors.New("URL already exists")
-	ErrIDAlreadyExists    = errors.New("ID already exists")
-	ErrURLNotFound        = errors.New("URL not found")
-	ErrURLDeleted         = errors.New("URL deleted")
+	// ErrURLAlreadyExists возвращается когда URL уже существует
+	ErrURLAlreadyExists = errors.New("URL already exists")
+	// ErrIDAlreadyExists возвращается когда сгенерированный ID уже существует
+	ErrIDAlreadyExists = errors.New("ID already exists")
+	// ErrURLNotFound возвращается когда URL не найден
+	ErrURLNotFound = errors.New("URL not found")
+	// ErrURLDeleted возвращается когда URL был удален
+	ErrURLDeleted = errors.New("URL deleted")
 
+	// ErrRepository возвращается при ошибке репозитория
 	ErrRepository = errors.New("repository error")
 )
 
 const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+// URLService предоставляет бизнес-логику для работы с URL.
 type URLService struct {
 	repo          repository.URLRepository
 	baseURL       string
@@ -45,6 +56,14 @@ type URLService struct {
 	log           *zap.Logger
 }
 
+// NewURLService создает новый экземпляр URLService.
+// Параметры:
+//   - repo - репозиторий для хранения URL
+//   - baseURL - базовый URL сервиса
+//   - queueSize - размер очереди удаления
+//   - workerCount - количество воркеров для асинхронного удаления
+//   - deleteTimeout - таймаут на операцию удаления
+//   - log - логгер
 func NewURLService(
 	repo repository.URLRepository,
 	baseURL string,
@@ -65,6 +84,7 @@ func NewURLService(
 	return svc
 }
 
+// startWorkers запускает воркеры для асинхронного удаления URL.
 func (s *URLService) startWorkers() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancelFunc = cancel
@@ -81,6 +101,7 @@ func (s *URLService) startWorkers() {
 	)
 }
 
+// deletionWorker обрабатывает задачи на удаление URL из очереди.
 func (s *URLService) deletionWorker(ctx context.Context, workerID int) {
 	s.log.Info("Deletion worker started", zap.Int("worker_id", workerID))
 	defer s.wg.Done()
@@ -126,6 +147,7 @@ func (s *URLService) deletionWorker(ctx context.Context, workerID int) {
 	}
 }
 
+// Shutdown останавливает сервис и ожидает завершения всех воркеров.
 func (s *URLService) Shutdown() {
 	s.log.Info("Shutting down URL service")
 
@@ -142,6 +164,7 @@ func (s *URLService) Shutdown() {
 
 var charsBytes = []byte(chars)
 
+// generateShortID генерирует случайный короткий идентификатор заданной длины.
 func generateShortID(l int) string {
 	b := make([]byte, l)
 	for i := range b {
@@ -150,6 +173,7 @@ func generateShortID(l int) string {
 	return string(b)
 }
 
+// processURL обрабатывает URL: проверяет существование или создает новый.
 func processURL(ctx context.Context, repo repository.URLRepository, url string, userID string) (string, error) {
 	foundID, err := repo.FindIDByURL(ctx, url, userID)
 	if err == nil {
@@ -170,10 +194,12 @@ func processURL(ctx context.Context, repo repository.URLRepository, url string, 
 	return "", ErrFailedToGenerateID
 }
 
+// Ping проверяет доступность базы данных.
 func (s *URLService) Ping(ctx context.Context) error {
 	return s.repo.Ping(ctx)
 }
 
+// GetUserUrls возвращает все URL принадлежащие пользователю.
 func (s *URLService) GetUserUrls(ctx context.Context, userID string) ([]model.ResponseGetUserUrls, error) {
 	result, err := s.repo.GetUserURLs(ctx, userID)
 	if err != nil {
@@ -194,6 +220,7 @@ func (s *URLService) GetUserUrls(ctx context.Context, userID string) ([]model.Re
 	return ressGetAll, nil
 }
 
+// ShortenBatch выполняет пакетное создание коротких URL.
 func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.RequestShortenBatch, userID string) (*model.BatchResult, error) {
 	if len(reqsBatch) == 0 {
 		return nil, ErrEmptyRequest
@@ -256,6 +283,7 @@ func (s *URLService) ShortenBatch(ctx context.Context, reqsBatch []model.Request
 	}, nil
 }
 
+// Shorten создает короткий URL для переданного URL.
 func (s *URLService) Shorten(ctx context.Context, reqs model.RequestShorten, userID string) (model.ResponseShorten, error) {
 	if reqs.URL == "" {
 		return model.ResponseShorten{}, ErrInvalidURL
@@ -270,6 +298,7 @@ func (s *URLService) Shorten(ctx context.Context, reqs model.RequestShorten, use
 	return ress, err
 }
 
+// BaseGet возвращает оригинальный URL по короткому идентификатору.
 func (s *URLService) BaseGet(ctx context.Context, shortURL string) (string, error) {
 	original, err := s.repo.Get(ctx, shortURL)
 
@@ -285,6 +314,7 @@ func (s *URLService) BaseGet(ctx context.Context, shortURL string) (string, erro
 	return original, nil
 }
 
+// BasePost создает короткий URL из текстового тела запроса.
 func (s *URLService) BasePost(ctx context.Context, originalURL string, userID string) (string, error) {
 	if originalURL == "" {
 		return "", ErrInvalidURL
@@ -295,6 +325,7 @@ func (s *URLService) BasePost(ctx context.Context, originalURL string, userID st
 	return s.baseURL + "/" + id, err
 }
 
+// DeleteUserUrls добавляет URL в очередь на удаление.
 func (s *URLService) DeleteUserUrls(ctx context.Context, reqs []string, userID string) error {
 	if len(reqs) == 0 {
 		return ErrEmptyRequest
