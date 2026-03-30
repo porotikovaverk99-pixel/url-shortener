@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/handler"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/middleware"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/model"
@@ -20,6 +21,14 @@ import (
 )
 
 const testSecretKey = "test-secret-key"
+
+func generateTestToken() string {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": "test-user-id",
+	})
+	tokenString, _ := token.SignedString([]byte(testSecretKey))
+	return tokenString
+}
 
 func setupTestServer() *httptest.Server {
 	tmpfile, _ := os.CreateTemp("", "test-*.json")
@@ -49,11 +58,20 @@ func ExampleURLHandler_BaseHandler_post() {
 	ts := setupTestServer()
 	defer ts.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/", strings.NewReader("https://example.com"))
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/", strings.NewReader("https://example.com"))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Authorization", "Bearer "+generateTestToken())
 
 	client := &http.Client{}
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	defer resp.Body.Close()
 
 	fmt.Println("Status:", resp.StatusCode)
@@ -67,13 +85,26 @@ func ExampleURLHandler_ShortenHandler() {
 	defer ts.Close()
 
 	reqBody := model.RequestShorten{URL: "https://example.com"}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/shorten", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/shorten", bytes.NewReader(body))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+generateTestToken())
 
 	client := &http.Client{}
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	defer resp.Body.Close()
 
 	fmt.Println("Status:", resp.StatusCode)
@@ -90,17 +121,33 @@ func ExampleURLHandler_ShortenBatchHandler() {
 		{CorrelationID: "1", OriginalURL: "https://google.com"},
 		{CorrelationID: "2", OriginalURL: "https://yandex.ru"},
 	}
-	body, _ := json.Marshal(reqBody)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/shorten/batch", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/shorten/batch", bytes.NewReader(body))
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+generateTestToken())
 
 	client := &http.Client{}
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	defer resp.Body.Close()
 
 	var responses []model.ResponseShortenBatch
-	json.NewDecoder(resp.Body).Decode(&responses)
+	if err := json.NewDecoder(resp.Body).Decode(&responses); err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
 	fmt.Println("Status:", resp.StatusCode)
 	fmt.Println("Count:", len(responses))
@@ -114,10 +161,19 @@ func ExampleURLHandler_PingHandler() {
 	ts := setupTestServer()
 	defer ts.Close()
 
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/ping", nil)
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/ping", nil)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+generateTestToken())
 
 	client := &http.Client{}
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 	defer resp.Body.Close()
 
 	fmt.Println("Status:", resp.StatusCode)
