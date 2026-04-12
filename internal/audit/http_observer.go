@@ -3,6 +3,8 @@ package audit
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -24,17 +26,22 @@ func NewHTTPObserver(url string) *HTTPObserver {
 func (h *HTTPObserver) Send(event Event) error {
 	data, err := json.Marshal(event)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal event: %w", err)
 	}
 
 	resp, err := h.client.Post(h.url, "application/json", bytes.NewBuffer(data))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to send event: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
 		return nil
 	}
-	return nil
+
+	body, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("audit server returned %s: %s", resp.Status, string(body))
 }

@@ -1,16 +1,29 @@
 package audit
 
-import "sync"
+import (
+	"log"
+	"sync"
+)
 
 type Manager struct {
 	observers []Observer
 	mu        sync.RWMutex
+	logger    Logger
+}
+
+type Logger interface {
+	Printf(format string, v ...interface{})
 }
 
 func NewManager() *Manager {
 	return &Manager{
 		observers: make([]Observer, 0),
+		logger:    log.Default(),
 	}
+}
+
+func (m *Manager) SetLogger(logger Logger) {
+	m.logger = logger
 }
 
 func (m *Manager) AddObserver(observer Observer) {
@@ -26,6 +39,10 @@ func (m *Manager) Notify(event Event) {
 	m.mu.RUnlock()
 
 	for _, observer := range observers {
-		go observer.Send(event)
+		go func(obs Observer, ev Event) {
+			if err := obs.Send(ev); err != nil && m.logger != nil {
+				m.logger.Printf("audit observer failed to send event: %v", err)
+			}
+		}(observer, event)
 	}
 }

@@ -101,7 +101,6 @@ func (s *URLService) startWorkers() {
 	)
 }
 
-// deletionWorker обрабатывает задачи на удаление URL из очереди.
 func (s *URLService) deletionWorker(ctx context.Context, workerID int) {
 	s.log.Info("Deletion worker started", zap.Int("worker_id", workerID))
 	defer s.wg.Done()
@@ -120,29 +119,31 @@ func (s *URLService) deletionWorker(ctx context.Context, workerID int) {
 				return
 			}
 
-			s.log.Info("Processing delete task",
-				zap.Int("worker_id", workerID),
-				zap.String("user_id", task.UserID),
-				zap.Int("url_count", len(task.ShortURLs)),
-			)
+			func() {
+				deleteCtx, cancel := context.WithTimeout(context.Background(), s.deleteTimeout)
+				defer cancel()
 
-			deleteCtx, cancel := context.WithTimeout(context.Background(), s.deleteTimeout)
-			defer cancel()
-
-			err := s.repo.MarkURLsAsDeleted(deleteCtx, task.ShortURLs, task.UserID)
-			if err != nil {
-				s.log.Error("Failed to delete URLs",
-					zap.Int("worker_id", workerID),
-					zap.String("user_id", task.UserID),
-					zap.Error(err),
-				)
-			} else {
-				s.log.Info("URLs deleted successfully",
+				s.log.Info("Processing delete task",
 					zap.Int("worker_id", workerID),
 					zap.String("user_id", task.UserID),
 					zap.Int("url_count", len(task.ShortURLs)),
 				)
-			}
+
+				err := s.repo.MarkURLsAsDeleted(deleteCtx, task.ShortURLs, task.UserID)
+				if err != nil {
+					s.log.Error("Failed to delete URLs",
+						zap.Int("worker_id", workerID),
+						zap.String("user_id", task.UserID),
+						zap.Error(err),
+					)
+				} else {
+					s.log.Info("URLs deleted successfully",
+						zap.Int("worker_id", workerID),
+						zap.String("user_id", task.UserID),
+						zap.Int("url_count", len(task.ShortURLs)),
+					)
+				}
+			}()
 		}
 	}
 }
