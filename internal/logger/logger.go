@@ -1,84 +1,85 @@
 package logger
 
 import (
-    "net/http"
-    "go.uber.org/zap"
-    "time"
+	"net/http"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 var Log *zap.Logger = zap.NewNop()
 
 type (
-    responseData struct {
-        status int
-        size int
-    }
+	responseData struct {
+		status int
+		size   int
+	}
 
-    loggingResponseWriter struct {
-        http.ResponseWriter
-        responseData *responseData
-    }
+	loggingResponseWriter struct {
+		http.ResponseWriter
+		responseData *responseData
+	}
 )
 
 func (r *loggingResponseWriter) WriteHeader(statusCode int) {
-    r.ResponseWriter.WriteHeader(statusCode) 
-    r.responseData.status = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+	r.responseData.status = statusCode
 }
 
 func (r *loggingResponseWriter) Write(b []byte) (int, error) {
-    size, err := r.ResponseWriter.Write(b) 
-    r.responseData.size += size
-    return size, err
+	size, err := r.ResponseWriter.Write(b)
+	r.responseData.size += size
+	return size, err
 }
 
 func Initialize(level string) error {
 
-    lvl, err := zap.ParseAtomicLevel(level)
-    if err != nil {
-        return err
-    }
+	lvl, err := zap.ParseAtomicLevel(level)
+	if err != nil {
+		return err
+	}
 
-    cfg := zap.NewProductionConfig()
-    cfg.Level = lvl
+	cfg := zap.NewProductionConfig()
+	cfg.Level = lvl
 
-    zl, err := cfg.Build()
-    if err != nil {
-        return err
-    }
+	zl, err := cfg.Build()
+	if err != nil {
+		return err
+	}
 
-    Log = zl
-    return nil
+	Log = zl
+	return nil
 
 }
 
 func RequestLogger(h http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-        uri := r.RequestURI
-        method := r.Method
+		uri := r.RequestURI
+		method := r.Method
 
-        responseData := &responseData {
-            status: 0,
-            size: 0,
-        }
+		responseData := &responseData{
+			status: 0,
+			size:   0,
+		}
 
-        lw := &loggingResponseWriter{
-            ResponseWriter: w,
-            responseData: responseData,
-        }
+		lw := &loggingResponseWriter{
+			ResponseWriter: w,
+			responseData:   responseData,
+		}
 
-        start := time.Now()
+		start := time.Now()
 
-        h.ServeHTTP(lw, r)
+		h.ServeHTTP(lw, r)
 
-        duration := time.Since(start)
+		duration := time.Since(start)
 
-        Log.Info("HTTP request", 
-            zap.String("uri", uri), 
-            zap.String("method", method),
-            zap.Duration("duration", duration),
-            zap.Int("status", responseData.status),
-            zap.Int("size", responseData.size),
-        )
-    })
+		Log.Info("HTTP request",
+			zap.String("uri", uri),
+			zap.String("method", method),
+			zap.Duration("duration", duration),
+			zap.Int("status", responseData.status),
+			zap.Int("size", responseData.size),
+		)
+	})
 }
