@@ -41,7 +41,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 }
 
 func checkCallExpr(pass *analysis.Pass, call *ast.CallExpr) {
-	// Check for panic() call
+
 	if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == "panic" {
 		if !isPanicAllowed(pass, call) {
 			pass.Reportf(call.Pos(), "use of panic is forbidden")
@@ -49,7 +49,6 @@ func checkCallExpr(pass *analysis.Pass, call *ast.CallExpr) {
 		return
 	}
 
-	// Check for pkg.Func() calls
 	fun, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
 		return
@@ -109,17 +108,15 @@ func isInMainMain(pass *analysis.Pass) bool {
 }
 
 func isPanicAllowed(pass *analysis.Pass, call *ast.CallExpr) bool {
-	// Check if in main.main
+
 	if isInMainMain(pass) {
 		return true
 	}
 
-	// Check if in init function
 	for _, file := range pass.Files {
 		for _, decl := range file.Decls {
 			funcDecl, ok := decl.(*ast.FuncDecl)
 			if ok && funcDecl.Name.Name == "init" {
-				// Check if call is inside this init function
 				if call.Pos() > funcDecl.Pos() && call.Pos() < funcDecl.End() {
 					return true
 				}
