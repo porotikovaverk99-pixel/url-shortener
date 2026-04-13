@@ -1,5 +1,6 @@
 package audit
 
+// generate:reset
 type Event struct {
 	TS     int64  `json:"ts"`
 	Action string `json:"action"`
