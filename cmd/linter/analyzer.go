@@ -2,6 +2,7 @@ package main
 
 import (
 	"go/ast"
+	"go/token"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -17,8 +18,27 @@ var Analyzer = &analysis.Analyzer{
 	Run:      run,
 }
 
+type mainInfo struct {
+	pos token.Pos
+	end token.Pos
+}
+
 func run(pass *analysis.Pass) (interface{}, error) {
 	inspect := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
+
+	var mainFuncs []mainInfo
+	if pass.Pkg.Name() == "main" {
+		for _, file := range pass.Files {
+			for _, decl := range file.Decls {
+				if funcDecl, ok := decl.(*ast.FuncDecl); ok && funcDecl.Name.Name == "main" {
+					mainFuncs = append(mainFuncs, mainInfo{
+						pos: funcDecl.Pos(),
+						end: funcDecl.End(),
+					})
+				}
+			}
+		}
+	}
 
 	nodeFilter := []ast.Node{
 		(*ast.CallExpr)(nil),
@@ -27,23 +47,48 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	inspect.Preorder(nodeFilter, func(n ast.Node) {
-		switch call := n.(type) {
+		var call *ast.CallExpr
+		switch node := n.(type) {
 		case *ast.CallExpr:
-			checkCallExpr(pass, call)
+			call = node
 		case *ast.GoStmt:
-			checkCallExpr(pass, call.Call)
+			call = node.Call
 		case *ast.DeferStmt:
-			checkCallExpr(pass, call.Call)
+			call = node.Call
+		default:
+			return
 		}
+		checkCallExpr(pass, call, mainFuncs)
 	})
 
 	return nil, nil
 }
 
-func checkCallExpr(pass *analysis.Pass, call *ast.CallExpr) {
+func isInsideMain(pos token.Pos, mainFuncs []mainInfo) bool {
+	for _, m := range mainFuncs {
+		if pos > m.pos && pos < m.end {
+			return true
+		}
+	}
+	return false
+}
 
+func isInsideInit(pass *analysis.Pass, pos token.Pos) bool {
+	for _, file := range pass.Files {
+		for _, decl := range file.Decls {
+			if funcDecl, ok := decl.(*ast.FuncDecl); ok && funcDecl.Name.Name == "init" {
+				if pos > funcDecl.Pos() && pos < funcDecl.End() {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func checkCallExpr(pass *analysis.Pass, call *ast.CallExpr, mainFuncs []mainInfo) {
 	if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == "panic" {
-		if !isPanicAllowed(pass, call) {
+		if !isPanicAllowed(pass, call, mainFuncs) {
 			pass.Reportf(call.Pos(), "use of panic is forbidden")
 		}
 		return
@@ -67,62 +112,33 @@ func checkCallExpr(pass *analysis.Pass, call *ast.CallExpr) {
 	}
 
 	if pkgName == "log" && (funcName == "Fatal" || funcName == "Fatalf" || funcName == "Fatalln") {
-		if !isInMainMain(pass) {
+		if !isInsideMain(call.Pos(), mainFuncs) {
 			pass.Reportf(call.Pos(), "call to log.%s outside main.main is forbidden", funcName)
 		}
 		return
 	}
 
 	if pkgName == "os" && funcName == "Exit" {
-		if !isInMainMain(pass) {
+		if !isInsideMain(call.Pos(), mainFuncs) {
 			pass.Reportf(call.Pos(), "call to os.Exit outside main.main is forbidden")
 		}
 		return
 	}
 
 	if pkgName == "runtime" && funcName == "Goexit" {
-		if !isInMainMain(pass) {
+		if !isInsideMain(call.Pos(), mainFuncs) {
 			pass.Reportf(call.Pos(), "call to runtime.Goexit outside main.main is forbidden")
 		}
 		return
 	}
 }
 
-func isInMainMain(pass *analysis.Pass) bool {
-	if pass.Pkg.Name() != "main" {
-		return false
-	}
-
-	for _, file := range pass.Files {
-		if file.Name.Name != "main" {
-			continue
-		}
-		for _, decl := range file.Decls {
-			funcDecl, ok := decl.(*ast.FuncDecl)
-			if ok && funcDecl.Name.Name == "main" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func isPanicAllowed(pass *analysis.Pass, call *ast.CallExpr) bool {
-
-	if isInMainMain(pass) {
+func isPanicAllowed(pass *analysis.Pass, call *ast.CallExpr, mainFuncs []mainInfo) bool {
+	if isInsideMain(call.Pos(), mainFuncs) {
 		return true
 	}
-
-	for _, file := range pass.Files {
-		for _, decl := range file.Decls {
-			funcDecl, ok := decl.(*ast.FuncDecl)
-			if ok && funcDecl.Name.Name == "init" {
-				if call.Pos() > funcDecl.Pos() && call.Pos() < funcDecl.End() {
-					return true
-				}
-			}
-		}
+	if isInsideInit(pass, call.Pos()) {
+		return true
 	}
-
 	return false
 }
