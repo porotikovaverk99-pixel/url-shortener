@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// generate:reset
 type Server struct {
 	router     *chi.Mux
 	addr       string
