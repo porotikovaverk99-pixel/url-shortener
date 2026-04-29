@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -20,13 +21,31 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
+func printBuildInfo() {
+	formatValue := func(val string) string {
+		if val == "" {
+			return "N/A"
+		}
+		return val
+	}
+
+	fmt.Printf("Build version: %s\n", formatValue(buildVersion))
+	fmt.Printf("Build date: %s\n", formatValue(buildDate))
+	fmt.Printf("Build commit: %s\n", formatValue(buildCommit))
+}
+
 const (
 	shutdownTimeout       = 15 * time.Second
 	serverShutdownTimeout = 10 * time.Second
 )
 
 func main() {
-
 	cfg := config.ParseFlags()
 
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
@@ -35,6 +54,12 @@ func main() {
 	defer func() {
 		_ = logger.Log.Sync()
 	}()
+
+	if cfg.ConfigFile != "" {
+		logger.Log.Info("Using config file", zap.String("path", cfg.ConfigFile))
+	}
+
+	printBuildInfo()
 
 	var URLRepository repository.URLRepository
 	var err error
@@ -76,6 +101,7 @@ func main() {
 
 	URLHandler := hdlr.NewURLHandler(URLService)
 	server := svr.New(cfg.RunAddr)
+	server.SetHTTPS(cfg.EnableHTTPS, cfg.CertFile, cfg.KeyFile)
 
 	router := server.Router()
 	secretKey := cfg.SecretKey
@@ -96,7 +122,10 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Log.Info("Starting server", zap.String("address", cfg.RunAddr))
+		logger.Log.Info("Starting server",
+			zap.String("address", cfg.RunAddr),
+			zap.Bool("https", cfg.EnableHTTPS),
+		)
 		if err := server.Run(); err != nil {
 			serverErr <- err
 		}
@@ -116,7 +145,6 @@ func main() {
 		gracefulShutdown(server, URLService, URLRepository, logger.Log)
 		logger.Log.Info("Application shutdown completed")
 	}
-
 }
 
 func gracefulShutdown(

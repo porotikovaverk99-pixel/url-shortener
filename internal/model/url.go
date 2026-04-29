@@ -41,6 +41,7 @@ type BatchItem struct {
 }
 
 // DeleteTask представляет задачу на удаление URL.
+// generate:reset
 type DeleteTask struct {
 	UserID    string   // Идентификатор пользователя
 	ShortURLs []string // Список коротких URL для удаления
