@@ -22,6 +22,9 @@ type Config struct {
 	DeleteTimeout   time.Duration `env:"DELETE_TIMEOUT" env-default:"30s" flag:"t" flag-desc:"delete operation timeout"`
 	FileAuditPath   string        `env:"AUDIT_FILE" env-default:"audit.json" flag:"audit-file" flag-desc:"file audit path"`
 	URLAudit        string        `env:"AUDIT_URL" flag:"audit-url" flag-desc:"audit url"`
+	EnableHTTPS     bool          `env:"ENABLE_HTTPS" env-default:"false" flag:"s" flag-desc:"enable HTTPS"`
+	CertFile        string        `env:"TLS_CERT_FILE" env-default:"server.crt" flag:"cert" flag-desc:"TLS certificate file"`
+	KeyFile         string        `env:"TLS_KEY_FILE" env-default:"server.key" flag:"key" flag-desc:"TLS key file"`
 }
 
 func ParseFlags() Config {
@@ -42,6 +45,10 @@ func ParseFlags() Config {
 	flag.IntVar(&cfg.DeleteWorkers, "w", cfg.DeleteWorkers, "delete workers count")
 	flag.DurationVar(&cfg.DeleteTimeout, "t", cfg.DeleteTimeout, "delete operation timeout")
 	flag.StringVar(&cfg.FileAuditPath, "audit-file", cfg.FileAuditPath, "file audit path")
+	flag.StringVar(&cfg.URLAudit, "audit-url", cfg.URLAudit, "audit url")
+	flag.BoolVar(&cfg.EnableHTTPS, "s", cfg.EnableHTTPS, "enable HTTPS")
+	flag.StringVar(&cfg.CertFile, "cert", cfg.CertFile, "TLS certificate file")
+	flag.StringVar(&cfg.KeyFile, "key", cfg.KeyFile, "TLS key file")
 
 	flag.Parse()
 
@@ -52,11 +59,19 @@ func ParseFlags() Config {
 		} else {
 			host = cfg.RunAddr
 		}
-		cfg.BaseURL = "http://" + host
+		if cfg.EnableHTTPS {
+			cfg.BaseURL = "https://" + host
+		} else {
+			cfg.BaseURL = "http://" + host
+		}
 	}
 
 	if !strings.HasPrefix(cfg.BaseURL, "http://") && !strings.HasPrefix(cfg.BaseURL, "https://") {
-		cfg.BaseURL = "http://" + cfg.BaseURL
+		if cfg.EnableHTTPS {
+			cfg.BaseURL = "https://" + cfg.BaseURL
+		} else {
+			cfg.BaseURL = "http://" + cfg.BaseURL
+		}
 	}
 
 	return cfg
