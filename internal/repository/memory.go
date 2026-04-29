@@ -181,5 +181,11 @@ func (ms *MemoryStorage) MarkURLsAsDeleted(ctx context.Context, urls []string, u
 }
 
 func (ms *MemoryStorage) Close() error {
+	ms.mu.RLock()
+	defer ms.mu.RUnlock()
+
+	if ms.filePath != "" {
+		return ms.WriteToFile(ms.data)
+	}
 	return nil
 }
