@@ -46,7 +46,6 @@ const (
 )
 
 func main() {
-
 	cfg := config.ParseFlags()
 
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
@@ -55,6 +54,10 @@ func main() {
 	defer func() {
 		_ = logger.Log.Sync()
 	}()
+
+	if cfg.ConfigFile != "" {
+		logger.Log.Info("Using config file", zap.String("path", cfg.ConfigFile))
+	}
 
 	printBuildInfo()
 
@@ -142,7 +145,6 @@ func main() {
 		gracefulShutdown(server, URLService, URLRepository, logger.Log)
 		logger.Log.Info("Application shutdown completed")
 	}
-
 }
 
 func gracefulShutdown(
