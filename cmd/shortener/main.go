@@ -98,6 +98,7 @@ func main() {
 
 	URLHandler := hdlr.NewURLHandler(URLService)
 	server := svr.New(cfg.RunAddr)
+	server.SetHTTPS(cfg.EnableHTTPS, cfg.CertFile, cfg.KeyFile)
 
 	router := server.Router()
 	secretKey := cfg.SecretKey
@@ -118,7 +119,10 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Log.Info("Starting server", zap.String("address", cfg.RunAddr))
+		logger.Log.Info("Starting server",
+			zap.String("address", cfg.RunAddr),
+			zap.Bool("https", cfg.EnableHTTPS),
+		)
 		if err := server.Run(); err != nil {
 			serverErr <- err
 		}

@@ -1,19 +1,20 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"time"
-
-	"context"
 
 	"github.com/go-chi/chi/v5"
 )
 
-// generate:reset
 type Server struct {
-	router     *chi.Mux
-	addr       string
-	httpServer *http.Server
+	router      *chi.Mux
+	addr        string
+	httpServer  *http.Server
+	enableHTTPS bool
+	certFile    string
+	keyFile     string
 }
 
 func New(addr string) *Server {
@@ -21,6 +22,12 @@ func New(addr string) *Server {
 		router: chi.NewRouter(),
 		addr:   addr,
 	}
+}
+
+func (s *Server) SetHTTPS(enable bool, certFile, keyFile string) {
+	s.enableHTTPS = enable
+	s.certFile = certFile
+	s.keyFile = keyFile
 }
 
 func (s *Server) Router() *chi.Mux {
@@ -65,6 +72,9 @@ func (s *Server) Run() error {
 		ReadHeaderTimeout: 2 * time.Second,
 	}
 
+	if s.enableHTTPS {
+		return s.httpServer.ListenAndServeTLS(s.certFile, s.keyFile)
+	}
 	return s.httpServer.ListenAndServe()
 }
 

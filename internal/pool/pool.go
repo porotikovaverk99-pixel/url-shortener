@@ -1,6 +1,8 @@
 package pool
 
-import "sync"
+import (
+	"sync"
+)
 
 type Resetter interface {
 	Reset()
@@ -13,7 +15,7 @@ type Pool[T Resetter] struct {
 func New[T Resetter](newFunc func() T) *Pool[T] {
 	return &Pool[T]{
 		pool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return newFunc()
 			},
 		},
