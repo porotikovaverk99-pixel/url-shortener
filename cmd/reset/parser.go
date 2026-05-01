@@ -96,7 +96,8 @@ func parsePackage(dir string) (*Package, error) {
 	}
 
 	conf := types.Config{
-		Importer: importer.Default(),
+		Importer: importer.ForCompiler(fset, "source", nil),
+		Sizes:    types.SizesFor("gc", "amd64"),
 	}
 
 	pkgInfo := &Package{
