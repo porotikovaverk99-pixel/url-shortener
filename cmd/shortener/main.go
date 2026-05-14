@@ -11,6 +11,7 @@ import (
 
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/audit"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/config"
+	grpcserver "github.com/porotikovaverk99-pixel/url-shortener/internal/grpc"
 	packgzip "github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
 	hdlr "github.com/porotikovaverk99-pixel/url-shortener/internal/handler"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/logger"
@@ -121,6 +122,19 @@ func main() {
 	server.HandleFunc("/api/user/urls", URLHandler.UserUrlsHandler().ServeHTTP)
 	server.HandleFunc("/api/internal/stats", middleware.TrustedSubnet(cfg.TrustedSubnet)(URLHandler.StatsHandler()).ServeHTTP)
 
+	// gRPC сервер
+	grpcAddr := ":9090"
+	grpcServer, err := grpcserver.NewServer(grpcAddr, URLService, logger.Log, false, "", "", cfg.SecretKey)
+	if err != nil {
+		logger.Log.Fatal("Failed to create gRPC server", zap.Error(err))
+	}
+
+	go func() {
+		if err := grpcServer.Run(); err != nil {
+			logger.Log.Error("gRPC server error", zap.Error(err))
+		}
+	}()
+
 	serverErr := make(chan error, 1)
 	go func() {
 		logger.Log.Info("Starting server",
@@ -138,18 +152,19 @@ func main() {
 	select {
 	case err := <-serverErr:
 		logger.Log.Error("Server stopped with error", zap.Error(err))
-		gracefulShutdown(server, URLService, URLRepository, logger.Log)
+		gracefulShutdown(server, grpcServer, URLService, URLRepository, logger.Log)
 		os.Exit(1)
 
 	case sig := <-sigChan:
 		logger.Log.Info("Received shutdown signal", zap.String("signal", sig.String()))
-		gracefulShutdown(server, URLService, URLRepository, logger.Log)
+		gracefulShutdown(server, grpcServer, URLService, URLRepository, logger.Log)
 		logger.Log.Info("Application shutdown completed")
 	}
 }
 
 func gracefulShutdown(
 	server *svr.Server,
+	grpcServer *grpcserver.Server,
 	service *service.URLService,
 	repo repository.URLRepository,
 	log *zap.Logger,
@@ -163,6 +178,7 @@ func gracefulShutdown(
 	serverCtx, serverCancel := context.WithTimeout(shutdownCtx, serverShutdownTimeout)
 	defer serverCancel()
 
+	grpcServer.Shutdown()
 	if err := server.Shutdown(serverCtx); err != nil {
 		log.Error("HTTP server shutdown error", zap.Error(err))
 	} else {

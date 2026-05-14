@@ -5,9 +5,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -15,7 +17,19 @@ type contextKey string
 
 const UserIDKey contextKey = "userID"
 
+var secretKey = ""
+
+type Claims struct {
+	UserID string `json:"user_id"`
+	jwt.RegisteredClaims
+}
+
+func SetSecretKey(key string) {
+	secretKey = key
+}
+
 func Auth(secretKey string) func(http.Handler) http.Handler {
+	SetSecretKey(secretKey)
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -90,4 +104,18 @@ func signUserID(userID string, key []byte) string {
 func GetUserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(UserIDKey).(string)
 	return userID, ok && userID != ""
+}
+
+func ValidateToken(tokenString string) (string, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secretKey), nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if !token.Valid {
+		return "", fmt.Errorf("invalid token")
+	}
+	return claims.UserID, nil
 }
