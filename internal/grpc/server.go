@@ -29,9 +29,6 @@ type Server struct {
 func NewServer(addr string, service *service.URLService, log *zap.Logger, enableTLS bool, certFile, keyFile, secretKey string) (*Server, error) {
 	var opts []grpc.ServerOption
 
-	if enableTLS {
-	}
-
 	grpcSrv := grpc.NewServer(opts...)
 
 	s := &Server{
