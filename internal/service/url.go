@@ -346,3 +346,8 @@ func (s *URLService) DeleteUserUrls(ctx context.Context, reqs []string, userID s
 		return ErrQueueFull
 	}
 }
+
+// GetStats возвращает количество URL и пользователей в сервисе.
+func (s *URLService) GetStats(ctx context.Context) (int, int, error) {
+	return s.repo.GetStats(ctx)
+}

@@ -11,5 +11,6 @@
     "audit_url": "",
     "enable_https": false,
     "cert_file": "server.crt",
-    "key_file": "server.key"
+    "key_file": "server.key",
+    "trusted_subnet": "192.168.1.0/24"
 }

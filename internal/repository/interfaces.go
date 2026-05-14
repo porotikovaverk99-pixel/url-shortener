@@ -48,6 +48,9 @@ type URLRepository interface {
 
 	// Close закрывает соединение с хранилищем.
 	Close() error
+
+	// GetStats возвращает количество URL и пользователей в сервисе.
+	GetStats(ctx context.Context) (urls int, users int, err error)
 }
 
 // UserRepository определяет интерфейс для работы с пользователями.

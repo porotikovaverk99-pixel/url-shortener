@@ -20,12 +20,13 @@ type Config struct {
 	SecretKey       string        `json:"secret_key" env:"SECRET_KEY" flag:"k" flag-desc:"secret key"`
 	DeleteQueueSize int           `json:"delete_queue_size" env:"DELETE_QUEUE_SIZE" env-default:"100" flag:"q" flag-desc:"delete queue size"`
 	DeleteWorkers   int           `json:"delete_workers" env:"DELETE_WORKERS" env-default:"5" flag:"w" flag-desc:"delete workers count"`
-	DeleteTimeout   time.Duration `json:"delete_timeout" env:"DELETE_TIMEOUT" env-default:"30s" flag:"t" flag-desc:"delete operation timeout"`
+	DeleteTimeout   time.Duration `json:"delete_timeout" env:"DELETE_TIMEOUT" env-default:"30s" flag:"timeout" flag-desc:"delete operation timeout"`
 	FileAuditPath   string        `json:"audit_file" env:"AUDIT_FILE" env-default:"audit.json" flag:"audit-file" flag-desc:"file audit path"`
 	URLAudit        string        `json:"audit_url" env:"AUDIT_URL" flag:"audit-url" flag-desc:"audit url"`
 	EnableHTTPS     bool          `json:"enable_https" env:"ENABLE_HTTPS" env-default:"false" flag:"s" flag-desc:"enable HTTPS"`
 	CertFile        string        `json:"cert_file" env:"TLS_CERT_FILE" env-default:"server.crt" flag:"cert" flag-desc:"TLS certificate file"`
 	KeyFile         string        `json:"key_file" env:"TLS_KEY_FILE" env-default:"server.key" flag:"key" flag-desc:"TLS key file"`
+	TrustedSubnet   string        `json:"trusted_subnet" env:"TRUSTED_SUBNET" flag:"t" flag-desc:"trusted subnet CIDR for internal stats"`
 	ConfigFile      string        `flag:"c" flag-desc:"path to config file"`
 }
 
@@ -43,12 +44,13 @@ func ParseFlags() Config {
 	flag.StringVar(&cfg.SecretKey, "k", "", "secret key")
 	flag.IntVar(&cfg.DeleteQueueSize, "q", 0, "delete queue size")
 	flag.IntVar(&cfg.DeleteWorkers, "w", 0, "delete workers count")
-	flag.DurationVar(&cfg.DeleteTimeout, "t", 0, "delete operation timeout")
+	flag.DurationVar(&cfg.DeleteTimeout, "timeout", 0, "delete operation timeout")
 	flag.StringVar(&cfg.FileAuditPath, "audit-file", "", "file audit path")
 	flag.StringVar(&cfg.URLAudit, "audit-url", "", "audit url")
 	flag.BoolVar(&cfg.EnableHTTPS, "s", false, "enable HTTPS")
 	flag.StringVar(&cfg.CertFile, "cert", "", "TLS certificate file")
 	flag.StringVar(&cfg.KeyFile, "key", "", "TLS key file")
+	flag.StringVar(&cfg.TrustedSubnet, "t", "", "trusted subnet CIDR for internal stats")
 
 	flag.Parse()
 
@@ -106,6 +108,18 @@ func ParseFlags() Config {
 		} else {
 			cfg.BaseURL = "http://" + cfg.BaseURL
 		}
+	}
+
+	if cfg.DeleteTimeout == 0 {
+		cfg.DeleteTimeout = 30 * time.Second
+	}
+
+	if cfg.DeleteQueueSize == 0 {
+		cfg.DeleteQueueSize = 100
+	}
+
+	if cfg.DeleteWorkers == 0 {
+		cfg.DeleteWorkers = 5
 	}
 
 	return cfg

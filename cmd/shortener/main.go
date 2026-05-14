@@ -119,6 +119,7 @@ func main() {
 	server.HandleFunc("/ping", URLHandler.PingHandler().ServeHTTP)
 	server.HandleFunc("/api/shorten/batch", URLHandler.ShortenBatchHandler().ServeHTTP)
 	server.HandleFunc("/api/user/urls", URLHandler.UserUrlsHandler().ServeHTTP)
+	server.HandleFunc("/api/internal/stats", middleware.TrustedSubnet(cfg.TrustedSubnet)(URLHandler.StatsHandler()).ServeHTTP)
 
 	serverErr := make(chan error, 1)
 	go func() {
@@ -132,7 +133,7 @@ func main() {
 	}()
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	select {
 	case err := <-serverErr:
