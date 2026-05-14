@@ -349,3 +349,28 @@ func (h *URLHandler) UserUrlsHandler() http.Handler {
 
 	})
 }
+
+// StatsResponse представляет ответ со статистикой сервиса
+type StatsResponse struct {
+	URLs  int `json:"urls"`
+	Users int `json:"users"`
+}
+
+// StatsHandler возвращает HTTP-обработчик для получения статистики сервиса.
+// Доступ разрешен только из доверенной подсети.
+func (h *URLHandler) StatsHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		urls, users, err := h.service.GetStats(r.Context())
+		if err != nil {
+			jsonError(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(StatsResponse{
+			URLs:  urls,
+			Users: users,
+		})
+	})
+}

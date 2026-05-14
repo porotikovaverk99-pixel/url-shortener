@@ -272,6 +272,24 @@ func (ps *PostgresStorage) MarkURLsAsDeleted(ctx context.Context, urls []string,
 	return nil
 }
 
+func (ps *PostgresStorage) GetStats(ctx context.Context) (int, int, error) {
+	var urlsCount, usersCount int
+
+	err := ps.pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM urls WHERE is_deleted = FALSE").Scan(&urlsCount)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get urls count: %w", err)
+	}
+
+	err = ps.pool.QueryRow(ctx,
+		"SELECT COUNT(DISTINCT user_id) FROM urls").Scan(&usersCount)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get users count: %w", err)
+	}
+
+	return urlsCount, usersCount, nil
+}
+
 func (ps *PostgresStorage) Close() error {
 	if ps.pool != nil {
 		ps.pool.Close()
