@@ -27,6 +27,7 @@ type Config struct {
 	CertFile        string        `json:"cert_file" env:"TLS_CERT_FILE" env-default:"server.crt" flag:"cert" flag-desc:"TLS certificate file"`
 	KeyFile         string        `json:"key_file" env:"TLS_KEY_FILE" env-default:"server.key" flag:"key" flag-desc:"TLS key file"`
 	TrustedSubnet   string        `json:"trusted_subnet" env:"TRUSTED_SUBNET" flag:"t" flag-desc:"trusted subnet CIDR for internal stats"`
+	GRPCAddr        string        `json:"grpc_address" env:"GRPC_ADDRESS" env-default:":9090" flag:"grpc-addr" flag-desc:"gRPC server address"`
 	ConfigFile      string        `flag:"c" flag-desc:"path to config file"`
 }
 
@@ -51,6 +52,7 @@ func ParseFlags() Config {
 	flag.StringVar(&cfg.CertFile, "cert", "", "TLS certificate file")
 	flag.StringVar(&cfg.KeyFile, "key", "", "TLS key file")
 	flag.StringVar(&cfg.TrustedSubnet, "t", "", "trusted subnet CIDR for internal stats")
+	flag.StringVar(&cfg.GRPCAddr, "grpc-addr", "", "gRPC server address")
 
 	flag.Parse()
 
@@ -85,6 +87,14 @@ func ParseFlags() Config {
 			cfg.RunAddr = addr
 		} else {
 			cfg.RunAddr = ":8080"
+		}
+	}
+
+	if cfg.GRPCAddr == "" {
+		if grpcAddr := os.Getenv("GRPC_ADDRESS"); grpcAddr != "" {
+			cfg.GRPCAddr = grpcAddr
+		} else {
+			cfg.GRPCAddr = ":9090"
 		}
 	}
 

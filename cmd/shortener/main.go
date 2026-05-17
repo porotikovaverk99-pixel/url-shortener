@@ -123,8 +123,7 @@ func main() {
 	server.HandleFunc("/api/internal/stats", middleware.TrustedSubnet(cfg.TrustedSubnet)(URLHandler.StatsHandler()).ServeHTTP)
 
 	// gRPC сервер
-	grpcAddr := ":9090"
-	grpcServer, err := grpcserver.NewServer(grpcAddr, URLService, logger.Log, false, "", "", cfg.SecretKey)
+	grpcServer, err := grpcserver.NewServer(cfg.GRPCAddr, URLService, logger.Log, cfg.EnableHTTPS, cfg.CertFile, cfg.KeyFile, cfg.SecretKey)
 	if err != nil {
 		logger.Log.Fatal("Failed to create gRPC server", zap.Error(err))
 	}

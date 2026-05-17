@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -28,6 +29,14 @@ type Server struct {
 
 func NewServer(addr string, service *service.URLService, log *zap.Logger, enableTLS bool, certFile, keyFile, secretKey string) (*Server, error) {
 	var opts []grpc.ServerOption
+
+	if enableTLS {
+		creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load TLS credentials: %w", err)
+		}
+		opts = append(opts, grpc.Creds(creds))
+	}
 
 	grpcSrv := grpc.NewServer(opts...)
 
@@ -71,11 +80,10 @@ func (s *Server) getUserID(ctx context.Context) (string, error) {
 	}
 
 	token := authHeaders[0]
-
 	if len(token) > 7 && token[:7] == "Bearer " {
 		token = token[7:]
 	}
-	userID, err := middleware.ValidateToken(token)
+	userID, err := middleware.ValidateToken(token, s.secretKey)
 	if err != nil {
 		return "", status.Error(codes.Unauthenticated, "invalid token")
 	}
