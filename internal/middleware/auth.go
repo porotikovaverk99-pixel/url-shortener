@@ -5,9 +5,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -15,14 +17,17 @@ type contextKey string
 
 const UserIDKey contextKey = "userID"
 
+type Claims struct {
+	UserID string `json:"user_id"`
+	jwt.RegisteredClaims
+}
+
 func Auth(secretKey string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 			key := []byte(secretKey)
 
 			cookie, err := r.Cookie("user_id")
-
 			var userID string
 			var signedCookie string
 
@@ -32,9 +37,7 @@ func Auth(secretKey string) func(http.Handler) http.Handler {
 
 			if signedCookie == "" || !verifyCookie(signedCookie, key) {
 				userID = uuid.New().String()
-
 				signedValue := signUserID(userID, key)
-
 				http.SetCookie(w, &http.Cookie{
 					Name:     "user_id",
 					Value:    signedValue,
@@ -48,9 +51,22 @@ func Auth(secretKey string) func(http.Handler) http.Handler {
 
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
 			h.ServeHTTP(w, r.WithContext(ctx))
-
 		})
 	}
+}
+
+func ValidateToken(tokenString, secretKey string) (string, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secretKey), nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if !token.Valid {
+		return "", fmt.Errorf("invalid token")
+	}
+	return claims.UserID, nil
 }
 
 func verifyCookie(signed string, key []byte) bool {
@@ -58,17 +74,14 @@ func verifyCookie(signed string, key []byte) bool {
 	if len(parts) != 2 {
 		return false
 	}
-
 	userID := parts[0]
 	expectedMAC, err := base64.URLEncoding.DecodeString(parts[1])
 	if err != nil {
 		return false
 	}
-
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(userID))
 	actualMAC := mac.Sum(nil)
-
 	return hmac.Equal(expectedMAC, actualMAC)
 }
 

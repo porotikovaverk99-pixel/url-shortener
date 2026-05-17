@@ -1,0 +1,16 @@
+{
+    "server_address": ":8080",
+    "base_url": "http://localhost:8080",
+    "log_level": "Info",
+    "file_storage_path": "storage.json",
+    "database_dsn": "",
+    "secret_key": "your-secret-key",
+    "delete_queue_size": 100,
+    "delete_workers": 5,
+    "audit_file": "audit.json",
+    "audit_url": "",
+    "enable_https": false,
+    "cert_file": "server.crt",
+    "key_file": "server.key",
+    "trusted_subnet": "192.168.1.0/24"
+}

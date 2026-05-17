@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/audit"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/config"
+	grpcserver "github.com/porotikovaverk99-pixel/url-shortener/internal/grpc"
 	packgzip "github.com/porotikovaverk99-pixel/url-shortener/internal/gzip"
 	hdlr "github.com/porotikovaverk99-pixel/url-shortener/internal/handler"
 	"github.com/porotikovaverk99-pixel/url-shortener/internal/logger"
@@ -20,13 +22,31 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
+func printBuildInfo() {
+	formatValue := func(val string) string {
+		if val == "" {
+			return "N/A"
+		}
+		return val
+	}
+
+	fmt.Printf("Build version: %s\n", formatValue(buildVersion))
+	fmt.Printf("Build date: %s\n", formatValue(buildDate))
+	fmt.Printf("Build commit: %s\n", formatValue(buildCommit))
+}
+
 const (
 	shutdownTimeout       = 15 * time.Second
 	serverShutdownTimeout = 10 * time.Second
 )
 
 func main() {
-
 	cfg := config.ParseFlags()
 
 	if err := logger.Initialize(cfg.LogLevel); err != nil {
@@ -35,6 +55,12 @@ func main() {
 	defer func() {
 		_ = logger.Log.Sync()
 	}()
+
+	if cfg.ConfigFile != "" {
+		logger.Log.Info("Using config file", zap.String("path", cfg.ConfigFile))
+	}
+
+	printBuildInfo()
 
 	var URLRepository repository.URLRepository
 	var err error
@@ -76,6 +102,7 @@ func main() {
 
 	URLHandler := hdlr.NewURLHandler(URLService)
 	server := svr.New(cfg.RunAddr)
+	server.SetHTTPS(cfg.EnableHTTPS, cfg.CertFile, cfg.KeyFile)
 
 	router := server.Router()
 	secretKey := cfg.SecretKey
@@ -93,34 +120,50 @@ func main() {
 	server.HandleFunc("/ping", URLHandler.PingHandler().ServeHTTP)
 	server.HandleFunc("/api/shorten/batch", URLHandler.ShortenBatchHandler().ServeHTTP)
 	server.HandleFunc("/api/user/urls", URLHandler.UserUrlsHandler().ServeHTTP)
+	server.HandleFunc("/api/internal/stats", middleware.TrustedSubnet(cfg.TrustedSubnet)(URLHandler.StatsHandler()).ServeHTTP)
+
+	// gRPC сервер
+	grpcServer, err := grpcserver.NewServer(cfg.GRPCAddr, URLService, logger.Log, cfg.EnableHTTPS, cfg.CertFile, cfg.KeyFile, cfg.SecretKey)
+	if err != nil {
+		logger.Log.Fatal("Failed to create gRPC server", zap.Error(err))
+	}
+
+	go func() {
+		if err := grpcServer.Run(); err != nil {
+			logger.Log.Error("gRPC server error", zap.Error(err))
+		}
+	}()
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Log.Info("Starting server", zap.String("address", cfg.RunAddr))
+		logger.Log.Info("Starting server",
+			zap.String("address", cfg.RunAddr),
+			zap.Bool("https", cfg.EnableHTTPS),
+		)
 		if err := server.Run(); err != nil {
 			serverErr <- err
 		}
 	}()
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
 
 	select {
 	case err := <-serverErr:
 		logger.Log.Error("Server stopped with error", zap.Error(err))
-		gracefulShutdown(server, URLService, URLRepository, logger.Log)
+		gracefulShutdown(server, grpcServer, URLService, URLRepository, logger.Log)
 		os.Exit(1)
 
 	case sig := <-sigChan:
 		logger.Log.Info("Received shutdown signal", zap.String("signal", sig.String()))
-		gracefulShutdown(server, URLService, URLRepository, logger.Log)
+		gracefulShutdown(server, grpcServer, URLService, URLRepository, logger.Log)
 		logger.Log.Info("Application shutdown completed")
 	}
-
 }
 
 func gracefulShutdown(
 	server *svr.Server,
+	grpcServer *grpcserver.Server,
 	service *service.URLService,
 	repo repository.URLRepository,
 	log *zap.Logger,
@@ -134,6 +177,7 @@ func gracefulShutdown(
 	serverCtx, serverCancel := context.WithTimeout(shutdownCtx, serverShutdownTimeout)
 	defer serverCancel()
 
+	grpcServer.Shutdown()
 	if err := server.Shutdown(serverCtx); err != nil {
 		log.Error("HTTP server shutdown error", zap.Error(err))
 	} else {
